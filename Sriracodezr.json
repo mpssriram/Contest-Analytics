@@ -1,0 +1,23 @@
+{
+    "status": "OK",
+    "result": [
+        {
+            "lastName": "Sriram",
+            "country": "India",
+            "lastOnlineTimeSeconds": 1773684035,
+            "city": "Bengaluru",
+            "rating": 981,
+            "friendOfCount": 4,
+            "titlePhoto": "https://userpic.codeforces.org/no-title.jpg",
+            "handle": "Sriracodezr",
+            "avatar": "https://userpic.codeforces.org/no-avatar.jpg",
+            "firstName": "MPS",
+            "contribution": 0,
+            "organization": "IIT Mandi",
+            "rank": "newbie",
+            "maxRating": 981,
+            "registrationTimeSeconds": 1759267335,
+            "maxRank": "newbie"
+        }
+    ]
+}
