@@ -7,20 +7,23 @@ import json
 class Get_data():
     def __init__(self,handles):
         self.handle = handles
-
+    #herewe can get the user info and all 
     def user_info(self):
         API_URL = f"https://codeforces.com/api/user.info?handles={self.handle}"
 
         response = requests.get(API_URL, timeout=30)
         if response.status_code == 200:
+
             handle_data = response.json()
-            with open(f"{handle}.json", "w", encoding="utf-8") as f:
-                json.dump(handle_data, f, indent=4)
+            if handle_data['status'] == 'OK':
+
+                with open(f"{self.handle}.json", "w", encoding="utf-8") as f:
+                    json.dump(handle_data['result'], f, indent=4)
             
-            return f"Success! Data saved to '{handle}.json'"
+                return f"{self.handle}.json"
         else:
             return f"Failed to fetch data. Status code: {response.status_code}",response.text
-    
+    #here we can get problems that are solved by the user which were suceesfully got accepted
     def user_submissions(self):
         API_URL = f"https://codeforces.com/api/user.status?handle={self.handle}"
 
@@ -30,6 +33,7 @@ class Get_data():
             if handle_data['status'] == 'OK':
                 submissions = handle_data['result']
                 unique_questions = []
+
                 for i in submissions:
                     if i['verdict'] == 'OK':
                         values = str(i['problem']['contestId']) + i['problem']['index']
@@ -41,15 +45,13 @@ class Get_data():
 
         else:
             return f"Failed to fetch data. Status code: {response.status_code}",response.text
-
-            
-
+    
 
 if __name__ == "__main__":
     handle = input()
 
     S1 = Get_data(handles=handle)
-    print(S1.user_info())
+    #print(S1.user_info())
     print(S1.user_submissions())
     
 
