@@ -41,7 +41,10 @@ api_router = APIRouter(prefix="/api", tags=["Contest Analytics"])
 
 @app.on_event("startup")
 def on_startup() -> None:
-    create_tables()
+    try:
+        create_tables()
+    except Exception as error:
+        print(f"Startup warning: could not create tables: {error}")
 
 
 @app.get("/health")
