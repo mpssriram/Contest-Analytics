@@ -1,0 +1,104 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --background: 210 33% 98%;
+    --foreground: 222 47% 11%;
+    --surface: 0 0% 100%;
+    --surface-muted: 210 40% 96%;
+    --border: 214 32% 91%;
+    --primary: 217 91% 60%;
+    --primary-soft: 214 100% 96%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 222 47% 12%;
+    --secondary-foreground: 210 40% 98%;
+    --accent: 188 94% 43%;
+    --success: 160 84% 39%;
+    --warning: 38 92% 50%;
+    --danger: 0 84% 60%;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --background: 222 47% 7%;
+    --foreground: 210 40% 98%;
+    --surface: 222 38% 12%;
+    --surface-muted: 218 29% 18%;
+    --border: 217 22% 24%;
+    --primary: 199 89% 58%;
+    --primary-soft: 217 33% 18%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 215 25% 88%;
+    --secondary-foreground: 222 47% 11%;
+    --accent: 167 74% 45%;
+    --success: 160 84% 39%;
+    --warning: 38 92% 58%;
+    --danger: 0 72% 58%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 28%),
+      radial-gradient(circle at top right, rgba(20, 184, 166, 0.1), transparent 24%),
+      linear-gradient(to bottom, transparent, rgba(148, 163, 184, 0.04));
+  }
+
+  ::selection {
+    background: rgba(56, 189, 248, 0.24);
+  }
+}
+
+@layer components {
+  .card-shell {
+    @apply rounded-3xl border border-border bg-surface/90 shadow-soft backdrop-blur-sm;
+  }
+
+  .section-title {
+    @apply font-display text-xl font-semibold tracking-tight text-foreground md:text-2xl;
+  }
+
+  .muted-copy {
+    @apply text-sm leading-6 text-slate-600 dark:text-slate-300;
+  }
+
+  .grid-fade {
+    background-image: theme("backgroundImage.grid-fade");
+    background-size: 36px 36px;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 9999px;
+  }
+}

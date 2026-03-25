@@ -1,116 +1,221 @@
-import requests
+﻿from __future__ import annotations
+
 import json
+from datetime import datetime, timezone
+from functools import lru_cache
+from typing import Any
+
+import requests
+
+
+class CodeforcesAPIError(Exception):
+    def __init__(self, message: str, status_code: int = 502):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
 
 
 class Get_data:
-    def __init__(self, handles):
-        self.handle = handles
+    BASE_URL = "https://codeforces.com/api"
+    HEADERS = {"User-Agent": "Contest Analytics/1.0"}
 
-    def user_info(self):
-        API_URL = f"https://codeforces.com/api/user.info?handles={self.handle}"
-        response = requests.get(API_URL, timeout=30)
+    def __init__(self, handles: str):
+        self.handle = handles.strip()
+        if not self.handle:
+            raise ValueError("Codeforces handle is required.")
 
-        if response.status_code == 200:
-            handle_data = response.json()
-            if handle_data['status'] == 'OK':
-                with open(f"{self.handle}.json", "w", encoding="utf-8") as f:
-                    json.dump(handle_data['result'], f, indent=4)
-                return f"{self.handle}.json"
-        else:
-            return f"Failed to fetch data. Status code: {response.status_code}", response.text
-    
-    def user_data_set(self):
-        API_URL = f"https://codeforces.com/api/user.status?handle={self.handle}"
-        response = requests.get(API_URL, timeout=30)
+    @classmethod
+    def _request(cls, path: str, params: dict[str, str]) -> dict[str, Any]:
+        url = f"{cls.BASE_URL}{path}"
+        try:
+            response = requests.get(url, params=params, headers=cls.HEADERS, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise CodeforcesAPIError(
+                "Codeforces API is unavailable right now. Please try again.",
+                status_code=502
+            ) from exc
 
-        if response.status_code == 200:
-            handle_data = response.json()
-            if handle_data['status'] == 'OK':
-                with open(f"{self.handle}.json", "w", encoding="utf-8") as f:
-                    json.dump(handle_data['result'], f, indent=4)
-                return f"{self.handle}.json"
-        else:
-            return f"Failed to fetch data. Status code: {response.status_code}", response.text
+        payload = response.json()
+        if payload.get("status") != "OK":
+            comment = payload.get("comment", "Codeforces API returned an unexpected response.")
+            status_code = 404 if "not found" in comment.lower() else 502
+            raise CodeforcesAPIError(comment, status_code=status_code)
 
+        return payload
 
-    def user_submissions(self):
-        API_URL = f"https://codeforces.com/api/user.status?handle={self.handle}"
-        response = requests.get(API_URL, timeout=30)
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _cached_user_info(handle: str) -> str:
+        payload = Get_data._request("/user.info", {"handles": handle})
+        results = payload.get("result", [])
+        if not results:
+            raise CodeforcesAPIError(f"Handle '{handle}' was not found.", status_code=404)
+        return json.dumps(results[0])
 
-        if response.status_code == 200:
-            handle_data = response.json()
-            if handle_data['status'] == 'OK':
-                submissions = handle_data['result']
-                unique_questions = []
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _cached_user_status(handle: str) -> str:
+        payload = Get_data._request("/user.status", {"handle": handle})
+        return json.dumps(payload.get("result", []))
 
-                for i in submissions:
-                    if i['verdict'] == 'OK':
-                        value = str(i['problem']['contestId']) + i['problem']['index']
-                        if value not in unique_questions:
-                            unique_questions.append(value)
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _cached_user_rating(handle: str) -> str:
+        payload = Get_data._request("/user.rating", {"handle": handle})
+        return json.dumps(payload.get("result", []))
 
-                return unique_questions
-        else:
-            return f"Failed to fetch data. Status code: {response.status_code}", response.text
+    def user_info(self) -> dict[str, Any]:
+        return json.loads(self._cached_user_info(self.handle))
 
-    def question_tags(self):
-        API_URL = f"https://codeforces.com/api/user.status?handle={self.handle}"
-        response = requests.get(API_URL, timeout=30)
+    def user_data_set(self) -> list[dict[str, Any]]:
+        return json.loads(self._cached_user_status(self.handle))
 
-        if response.status_code == 200:
-            handle_data = response.json()
-            if handle_data['status'] == 'OK':
-                submissions = handle_data['result']
-                question_to_tags = {}
+    def user_rating_history(self) -> list[dict[str, Any]]:
+        return json.loads(self._cached_user_rating(self.handle))
 
-                for i in submissions:
-                    if i['verdict'] == 'OK':
-                        qname = str(i['problem']['contestId']) + i['problem']['index']
-                        tags = i['problem']['tags']
+    def user_submissions(self) -> list[str]:
+        solved_ids: list[str] = []
+        for submission in self.user_data_set():
+            if submission.get("verdict") != "OK":
+                continue
 
-                        if qname not in question_to_tags:
-                            question_to_tags[qname] = tags
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
 
-                unique_questions = list(question_to_tags.keys())
-                unique_tags = list(question_to_tags.values())
+            problem_id = f"{contest_id}{index}"
+            if problem_id not in solved_ids:
+                solved_ids.append(problem_id)
 
-                return unique_questions, unique_tags
+        return solved_ids
 
-        else:
-            return f"Failed to fetch data. Status code: {response.status_code}", response.text
-        
-    def unsolved_questions():
-        API_URL = f"https://codeforces.com/api/user.status?handle={self.handle}"
-        response = requests.get(API_URL, timeout=30)
+    def solved_problem_records(self) -> list[dict[str, Any]]:
+        submissions = self.user_data_set()
+        attempt_counts: dict[str, int] = {}
 
-        if response.status_code == 200:
-            handle_data = response.json()
-            if handle_data['status'] == 'OK':
-                submissions = handle_data['result']
-                unique_questions = []
+        for submission in submissions:
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
 
-                for i in submissions:
-                    
-                    value = str(i['problem']['contestId']) + i['problem']['index']
-                    if value not in unique_questions:
-                        unique_questions.append(value)
+            problem_id = f"{contest_id}{index}"
+            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
 
-                
+        solved_lookup: dict[str, dict[str, Any]] = {}
+        for submission in reversed(submissions):
+            if submission.get("verdict") != "OK":
+                continue
 
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
 
-                
-                return unique_questions
-        else:
-            return f"Failed to fetch data. Status code: {response.status_code}", response.text
+            problem_id = f"{contest_id}{index}"
+            if problem_id in solved_lookup:
+                continue
 
+            created_at = submission.get("creationTimeSeconds")
+            solved_lookup[problem_id] = {
+                "id": problem_id,
+                "name": problem.get("name", problem_id),
+                "rating": problem.get("rating"),
+                "tags": problem.get("tags", []),
+                "contestId": contest_id,
+                "index": index,
+                "url": self.problem_url(contest_id, index),
+                "solvedAt": (
+                    datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
+                    if created_at
+                    else None
+                ),
+                "attempts": attempt_counts.get(problem_id, 1),
+                "language": submission.get("programmingLanguage")
+            }
 
+        return sorted(
+            solved_lookup.values(),
+            key=lambda item: item.get("solvedAt") or "",
+            reverse=True
+        )
+
+    @staticmethod
+    def problem_url(contest_id: int | None, index: str | None) -> str | None:
+        if contest_id is None or index is None:
+            return None
+        return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
+
+    def question_tags(self) -> tuple[list[str], list[list[str]]]:
+        problems = self.solved_problem_records()
+        unique_questions = [problem["id"] for problem in problems]
+        unique_tags = [problem["tags"] for problem in problems]
+        return unique_questions, unique_tags
+
+    def unsolved_questions(self) -> list[str]:
+        attempted: list[str] = []
+        for submission in self.user_data_set():
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
+
+            problem_id = f"{contest_id}{index}"
+            if problem_id not in attempted:
+                attempted.append(problem_id)
+
+        return attempted
+
+    def unsolved_problem_records(self) -> list[dict[str, Any]]:
+        submissions = self.user_data_set()
+        solved_ids = set(self.user_submissions())
+        unsolved_lookup: dict[str, dict[str, Any]] = {}
+
+        for submission in submissions:
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
+
+            problem_id = f"{contest_id}{index}"
+            if problem_id in solved_ids or problem_id in unsolved_lookup:
+                continue
+
+            created_at = submission.get("creationTimeSeconds")
+            unsolved_lookup[problem_id] = {
+                "id": problem_id,
+                "name": problem.get("name", problem_id),
+                "rating": problem.get("rating"),
+                "tags": problem.get("tags", []),
+                "contestId": contest_id,
+                "index": index,
+                "url": self.problem_url(contest_id, index),
+                "lastTriedAt": (
+                    datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
+                    if created_at
+                    else None
+                ),
+                "verdict": submission.get("verdict"),
+                "language": submission.get("programmingLanguage"),
+            }
+
+        return sorted(
+            unsolved_lookup.values(),
+            key=lambda item: item.get("lastTriedAt") or "",
+            reverse=True
+        )
 
 
 if __name__ == "__main__":
-    handle = input()
-    S1 = Get_data(handles=handle)
-    print(S1.user_data_set())
-    print(S1.user_submissions())
-    print(S1.question_tags())
-    
-
+    handle = input("Enter handle: ").strip()
+    fetcher = Get_data(handles=handle)
+    print(fetcher.user_info())
+    print(fetcher.user_submissions())
+    print(fetcher.question_tags())
