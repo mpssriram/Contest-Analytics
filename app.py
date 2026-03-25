@@ -18,6 +18,8 @@ FRONTEND_URL = os.getenv("FRONTEND_URL")
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://contest-analytics.vercel.app",
+    "https://contest-analytics-m822fntiv-mpssrirams-projects.vercel.app",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
 ]
@@ -40,6 +42,11 @@ api_router = APIRouter(prefix="/api", tags=["Contest Analytics"])
 @app.on_event("startup")
 def on_startup() -> None:
     create_tables()
+
+
+@app.get("/health")
+def root_health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 def raise_http_error(error: Exception) -> None:
