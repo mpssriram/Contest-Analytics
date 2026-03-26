@@ -97,7 +97,8 @@ def health() -> dict[str, str]:
 
 @api_router.get("/tracked-handles", response_model=list[TrackedHandleResponse])
 def list_tracked_handles(db: Session = Depends(get_db)) -> list[TrackedHandle]:
-    db = require_db(db)
+    if db is None:
+        return []
     return (
         db.query(TrackedHandle)
         .order_by(TrackedHandle.last_searched_at.desc(), TrackedHandle.created_at.desc())
@@ -169,7 +170,11 @@ def get_rating_stats(handle: str) -> list[dict[str, int | str]]:
 def get_summary(handle: str, db: Session = Depends(get_db)) -> dict[str, object | None]:
     try:
         summary = Dataframe_former(handle).summary()
-        tracked_handle = save_tracked_handle(handle, require_db(db))
+        if db is None:
+            summary["trackedHandle"] = None
+            return summary
+
+        tracked_handle = save_tracked_handle(handle, db)
         summary["trackedHandle"] = {
             "id": tracked_handle.id,
             "handle": tracked_handle.handle,
