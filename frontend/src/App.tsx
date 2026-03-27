@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { Navbar } from "./components/Navbar";
 import { useTheme } from "./hooks/useTheme";
 import { Dashboard } from "./pages/Dashboard";
@@ -20,6 +21,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <Analytics />
     </div>
   );
 }
