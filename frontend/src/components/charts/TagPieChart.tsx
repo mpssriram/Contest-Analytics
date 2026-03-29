@@ -35,8 +35,8 @@ export function TagPieChart({ data }: TagPieChartProps) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-center">
-        <div className="h-[18rem]">
+      <div className="mt-6 grid gap-6 2xl:grid-cols-[minmax(0,1fr)_15rem] 2xl:items-center">
+        <div className="mx-auto h-[18rem] w-full max-w-[18rem]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -45,8 +45,8 @@ export function TagPieChart({ data }: TagPieChartProps) {
                 nameKey="tag"
                 cx="50%"
                 cy="50%"
-                innerRadius={58}
-                outerRadius={92}
+                innerRadius="55%"
+                outerRadius="82%"
                 paddingAngle={2}
               >
                 {chartData.map((entry) => (
