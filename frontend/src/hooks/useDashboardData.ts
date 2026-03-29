@@ -8,7 +8,7 @@ interface DashboardState {
   error: string | null;
 }
 
-export function useDashboardData(handle: string) {
+export function useDashboardData(handle: string, trackSearch = false) {
   const [state, setState] = useState<DashboardState>({
     data: null,
     loading: true,
@@ -36,7 +36,7 @@ export function useDashboardData(handle: string) {
       error: null
     }));
 
-    fetchDashboardData(handle)
+    fetchDashboardData(handle, trackSearch)
       .then((data) => {
         if (!cancelled) {
           setState({ data, loading: false, error: null });
@@ -55,7 +55,7 @@ export function useDashboardData(handle: string) {
     return () => {
       cancelled = true;
     };
-  }, [handle, reloadCount]);
+  }, [handle, reloadCount, trackSearch]);
 
   return {
     ...state,

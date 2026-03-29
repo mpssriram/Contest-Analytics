@@ -1,11 +1,6 @@
 import type {
   DashboardData,
-  ProfileResponse,
-  RatingStat,
-  SolvedProblem,
-  SummaryResponse,
-  TagStat,
-  UnsolvedProblem
+  TrackedHandle,
 } from "../types/analytics";
 
 const DEFAULT_API_URL = "http://127.0.0.1:8000";
@@ -32,34 +27,21 @@ async function requestJson<T>(path: string): Promise<T> {
 }
 
 export function fetchTrackedHandles() {
-  return requestJson<SummaryResponse["trackedHandle"][]>("/api/tracked-handles");
+  return requestJson<TrackedHandle[]>("/api/tracked-handles");
 }
 
-export async function fetchDashboardData(handle: string): Promise<DashboardData> {
+export async function fetchDashboardData(handle: string, trackSearch = false): Promise<DashboardData> {
   const normalizedHandle = handle.trim();
   if (!normalizedHandle) {
     throw new Error("Enter a Codeforces handle to continue.");
   }
 
   const encodedHandle = encodeURIComponent(normalizedHandle);
-  const profileEndpoint = `/api/profile/${encodedHandle}`;
-  const summaryEndpoint = `/api/summary/${encodedHandle}`;
+  const searchParams = new URLSearchParams();
+  if (trackSearch) {
+    searchParams.set("track", "true");
+  }
 
-  const [profile, summary, tagStats, ratingStats, solvedProblems, unsolvedProblems] = await Promise.all([
-    requestJson<ProfileResponse>(profileEndpoint),
-    requestJson<SummaryResponse>(summaryEndpoint),
-    requestJson<TagStat[]>(`/api/tag-stats/${encodedHandle}`),
-    requestJson<RatingStat[]>(`/api/rating-stats/${encodedHandle}`),
-    requestJson<SolvedProblem[]>(`/api/solved/${encodedHandle}`),
-    requestJson<UnsolvedProblem[]>(`/api/unsolved/${encodedHandle}`)
-  ]);
-
-  return {
-    profile,
-    summary,
-    tagStats,
-    ratingStats,
-    solvedProblems,
-    unsolvedProblems
-  };
+  const dashboardPath = `/api/dashboard/${encodedHandle}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  return requestJson<DashboardData>(dashboardPath);
 }

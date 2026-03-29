@@ -22,6 +22,9 @@ class Get_data:
         self.handle = handles.strip()
         if not self.handle:
             raise ValueError("Codeforces handle is required.")
+        self._user_info_cache: str | None = None
+        self._user_status_cache: str | None = None
+        self._user_rating_cache: str | None = None
 
     @classmethod
     def _request(cls, path: str, params: dict[str, str]) -> dict[str, Any]:
@@ -43,32 +46,29 @@ class Get_data:
 
         return payload
 
-    @staticmethod
-    def _cached_user_info(handle: str) -> str:
-        payload = Get_data._request("/user.info", {"handles": handle})
-        results = payload.get("result", [])
-        if not results:
-            raise CodeforcesAPIError(f"Handle '{handle}' was not found.", status_code=404)
-        return json.dumps(results[0])
-
-    @staticmethod
-    def _cached_user_status(handle: str) -> str:
-        payload = Get_data._request("/user.status", {"handle": handle})
-        return json.dumps(payload.get("result", []))
-
-    @staticmethod
-    def _cached_user_rating(handle: str) -> str:
-        payload = Get_data._request("/user.rating", {"handle": handle})
-        return json.dumps(payload.get("result", []))
-
     def user_info(self) -> dict[str, Any]:
-        return json.loads(self._cached_user_info(self.handle))
+        if self._user_info_cache is None:
+            payload = self._request("/user.info", {"handles": self.handle})
+            results = payload.get("result", [])
+            if not results:
+                raise CodeforcesAPIError(f"Handle '{self.handle}' was not found.", status_code=404)
+            self._user_info_cache = json.dumps(results[0])
+
+        return json.loads(self._user_info_cache)
 
     def user_data_set(self) -> list[dict[str, Any]]:
-        return json.loads(self._cached_user_status(self.handle))
+        if self._user_status_cache is None:
+            payload = self._request("/user.status", {"handle": self.handle})
+            self._user_status_cache = json.dumps(payload.get("result", []))
+
+        return json.loads(self._user_status_cache)
 
     def user_rating_history(self) -> list[dict[str, Any]]:
-        return json.loads(self._cached_user_rating(self.handle))
+        if self._user_rating_cache is None:
+            payload = self._request("/user.rating", {"handle": self.handle})
+            self._user_rating_cache = json.dumps(payload.get("result", []))
+
+        return json.loads(self._user_rating_cache)
 
     def user_submissions(self) -> list[str]:
         solved_ids: list[str] = []

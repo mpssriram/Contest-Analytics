@@ -1,4 +1,5 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { InsightsPanel } from "../components/InsightsPanel";
@@ -18,12 +19,22 @@ import { formatCompactNumber, formatDate, formatRating, toTitleCase } from "../u
 export function Dashboard() {
   const navigate = useNavigate();
   const params = useParams();
+  const [searchParams] = useSearchParams();
   const handle = decodeURIComponent(params.handle || "");
-  const { data, loading, error, reload } = useDashboardData(handle);
+  const shouldTrackSearch = searchParams.get("track") === "1";
+  const { data, loading, error, reload } = useDashboardData(handle, shouldTrackSearch);
 
   const handleAnalyze = (nextHandle: string) => {
-    navigate(`/dashboard/${encodeURIComponent(nextHandle)}`);
+    navigate(`/dashboard/${encodeURIComponent(nextHandle)}?track=1`);
   };
+
+  useEffect(() => {
+    if (!shouldTrackSearch || loading || error || !data) {
+      return;
+    }
+
+    navigate(`/dashboard/${encodeURIComponent(handle)}`, { replace: true });
+  }, [data, error, handle, loading, navigate, shouldTrackSearch]);
 
   if (loading) {
     return <LoadingDashboard />;

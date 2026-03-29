@@ -69,7 +69,7 @@ export interface SummaryResponse {
   weakestTags: string[];
   recommendations: string[];
   activityTrend: ActivityPoint[];
-  trackedHandle?: TrackedHandle;
+  trackedHandle: TrackedHandle | null;
 }
 
 export interface DashboardData {

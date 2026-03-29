@@ -67,13 +67,44 @@ def require_db(db: Session | None) -> Session:
     return db
 
 
-def save_tracked_handle(handle: str, db: Session) -> TrackedHandle:
+def get_tracked_handle(handle: str, db: Session) -> TrackedHandle | None:
     normalized_handle = handle.strip()
-    tracked_handle = (
+    return (
         db.query(TrackedHandle)
         .filter(TrackedHandle.handle == normalized_handle)
         .first()
     )
+
+
+def serialize_tracked_handle(tracked_handle: TrackedHandle | None) -> dict[str, object | None] | None:
+    if tracked_handle is None:
+        return None
+
+    return {
+        "id": tracked_handle.id,
+        "handle": tracked_handle.handle,
+        "created_at": tracked_handle.created_at,
+        "last_searched_at": tracked_handle.last_searched_at,
+        "searched_count": tracked_handle.searched_count,
+    }
+
+
+def build_profile_response(user: dict[str, object | None]) -> dict[str, object | None]:
+    return {
+        "handle": user.get("handle"),
+        "rank": user.get("rank"),
+        "rating": user.get("rating"),
+        "maxRating": user.get("maxRating"),
+        "avatar": user.get("titlePhoto") or user.get("avatar"),
+        "contribution": user.get("contribution", 0),
+        "country": user.get("country"),
+        "organization": user.get("organization"),
+    }
+
+
+def save_tracked_handle(handle: str, db: Session) -> TrackedHandle:
+    normalized_handle = handle.strip()
+    tracked_handle = get_tracked_handle(normalized_handle, db)
 
     if tracked_handle is None:
         tracked_handle = TrackedHandle(
@@ -123,16 +154,7 @@ def get_profile(handle: str) -> dict[str, object | None]:
     except Exception as error:
         raise_http_error(error)
 
-    return {
-        "handle": user.get("handle"),
-        "rank": user.get("rank"),
-        "rating": user.get("rating"),
-        "maxRating": user.get("maxRating"),
-        "avatar": user.get("titlePhoto") or user.get("avatar"),
-        "contribution": user.get("contribution", 0),
-        "country": user.get("country"),
-        "organization": user.get("organization"),
-    }
+    return build_profile_response(user)
 
 
 @api_router.get("/solved/{handle}")
@@ -168,22 +190,44 @@ def get_rating_stats(handle: str) -> list[dict[str, int | str]]:
 
 
 @api_router.get("/summary/{handle}")
-def get_summary(handle: str, db: Session = Depends(get_db)) -> dict[str, object | None]:
+def get_summary(handle: str, track: bool = False, db: Session = Depends(get_db)) -> dict[str, object | None]:
     try:
         summary = Dataframe_former(handle).summary()
         if db is None:
             summary["trackedHandle"] = None
             return summary
 
-        tracked_handle = save_tracked_handle(handle, db)
-        summary["trackedHandle"] = {
-            "id": tracked_handle.id,
-            "handle": tracked_handle.handle,
-            "created_at": tracked_handle.created_at,
-            "last_searched_at": tracked_handle.last_searched_at,
-            "searched_count": tracked_handle.searched_count,
-        }
+        tracked_handle = save_tracked_handle(handle, db) if track else get_tracked_handle(handle, db)
+        summary["trackedHandle"] = serialize_tracked_handle(tracked_handle)
         return summary
+    except Exception as error:
+        raise_http_error(error)
+
+
+@api_router.get("/dashboard/{handle}")
+def get_dashboard(handle: str, track: bool = False, db: Session = Depends(get_db)) -> dict[str, object | None]:
+    try:
+        source = Get_data(handle)
+        analytics = Dataframe_former(source=source)
+        profile = build_profile_response(source.user_info())
+        solved_problems = source.solved_problem_records()
+        unsolved_problems = source.unsolved_problem_records()
+        summary = analytics.summary()
+
+        tracked_handle = None
+        if db is not None:
+            tracked_handle = save_tracked_handle(handle, db) if track else get_tracked_handle(handle, db)
+
+        summary["trackedHandle"] = serialize_tracked_handle(tracked_handle)
+
+        return {
+            "profile": profile,
+            "summary": summary,
+            "tagStats": analytics.tag_count_from_df(),
+            "ratingStats": analytics.rating_bucket_stats(),
+            "solvedProblems": solved_problems,
+            "unsolvedProblems": unsolved_problems,
+        }
     except Exception as error:
         raise_http_error(error)
 

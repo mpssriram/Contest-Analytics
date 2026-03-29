@@ -29,7 +29,12 @@ COMMON_TAGS = [
 
 
 class Dataframe_former:
-    def __init__(self, handle: str = ""):
+    def __init__(self, handle: str = "", source: Get_data | None = None):
+        if source is not None:
+            self.source = source
+            self.handle = source.handle
+            return
+
         self.handle = handle.strip()
         if not self.handle:
             raise ValueError("Codeforces handle is required.")

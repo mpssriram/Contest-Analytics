@@ -6,7 +6,7 @@ export function Home() {
   const navigate = useNavigate();
 
   const handleAnalyze = (handle: string) => {
-    navigate(`/dashboard/${encodeURIComponent(handle)}`);
+    navigate(`/dashboard/${encodeURIComponent(handle)}?track=1`);
   };
 
   return (
