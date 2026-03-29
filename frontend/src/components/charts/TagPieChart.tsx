@@ -39,7 +39,16 @@ export function TagPieChart({ data }: TagPieChartProps) {
         <div className="h-[18rem]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={chartData} dataKey="count" nameKey="tag" innerRadius={58} outerRadius={92} paddingAngle={2}>
+              <Pie
+                data={chartData}
+                dataKey="count"
+                nameKey="tag"
+                cx="50%"
+                cy="50%"
+                innerRadius={58}
+                outerRadius={92}
+                paddingAngle={2}
+              >
                 {chartData.map((entry) => (
                   <Cell key={entry.tag} fill={entry.fill} />
                 ))}
