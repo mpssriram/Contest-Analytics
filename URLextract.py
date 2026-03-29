@@ -2,7 +2,6 @@
 
 import json
 from datetime import datetime, timezone
-from functools import lru_cache
 from typing import Any
 
 import requests
@@ -45,7 +44,6 @@ class Get_data:
         return payload
 
     @staticmethod
-    @lru_cache(maxsize=128)
     def _cached_user_info(handle: str) -> str:
         payload = Get_data._request("/user.info", {"handles": handle})
         results = payload.get("result", [])
@@ -54,13 +52,11 @@ class Get_data:
         return json.dumps(results[0])
 
     @staticmethod
-    @lru_cache(maxsize=128)
     def _cached_user_status(handle: str) -> str:
         payload = Get_data._request("/user.status", {"handle": handle})
         return json.dumps(payload.get("result", []))
 
     @staticmethod
-    @lru_cache(maxsize=128)
     def _cached_user_rating(handle: str) -> str:
         payload = Get_data._request("/user.rating", {"handle": handle})
         return json.dumps(payload.get("result", []))
