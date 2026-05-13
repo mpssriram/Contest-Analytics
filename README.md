@@ -12,6 +12,7 @@ The project was built with AI-assisted development for parts of the scaffolding,
 - Explore chart-based analytics for tag distribution, rating buckets, and recent activity
 - Review solved problems in a searchable and filterable table
 - Review unsolved attempted problems and jump back to the original Codeforces problem page
+- Compare two handles side by side across solved count, contests, average rating, topic overlap, common solved problems, and one-sided solved-problem differences
 - Track searched handles with MySQL for lightweight backend metadata
 - Use the app through a deployed frontend on Vercel and deployed backend on Railway
 
@@ -75,7 +76,7 @@ The backend is organized into small, beginner-friendly layers:
 - `URLextract.py`
   Fetches raw Codeforces data and formats reusable records for profile data, solved problems, unsolved attempts, and rating history.
 - `Data_dataframe.py`
-  Builds the analytics layer, including tag statistics, rating buckets, summary metrics, strongest and weakest topics, and activity trends.
+  Builds the analytics layer, including tag statistics, rating buckets, summary metrics, strongest and least represented topics, and activity trends.
 - `database.py`
   Configures the SQLAlchemy engine, database session, and optional MySQL connection for tracked handle storage.
 - `models.py`
@@ -118,6 +119,8 @@ Core routes:
 - `GET /api/tag-stats/{handle}`
 - `GET /api/rating-stats/{handle}`
 - `GET /api/summary/{handle}`
+- `GET /api/dashboard/{handle}`
+- `GET /api/compare/{left_handle}/{right_handle}`
 
 Database-backed routes:
 
@@ -276,7 +279,7 @@ For recruiters or collaborators, this project demonstrates:
 ## Future Improvements
 
 - Add caching for repeated handle lookups
-- Add more advanced problem recommendations based on weak tags and rating history
+- Add more detailed observation reports based on tag coverage and rating history
 - Add contest-by-contest performance trends
 - Add authentication and saved user dashboards
 - Improve test coverage for backend analytics routes and frontend data states

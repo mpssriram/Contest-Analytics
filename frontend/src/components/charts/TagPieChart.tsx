@@ -35,7 +35,7 @@ export function TagPieChart({ data }: TagPieChartProps) {
   const totalSolvedAcrossTags = data.reduce((sum, item) => sum + item.count, 0);
 
   return (
-    <section className="card-shell p-6">
+    <section className="card-shell min-w-0 p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="section-title">Tag Distribution</h3>
@@ -46,7 +46,7 @@ export function TagPieChart({ data }: TagPieChartProps) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-center">
+      <div className="mt-6 grid gap-6 2xl:grid-cols-[minmax(16rem,1fr)_20rem] 2xl:items-center">
         <div className="mx-auto h-[20rem] w-full max-w-[22rem]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -81,7 +81,7 @@ export function TagPieChart({ data }: TagPieChartProps) {
           </ResponsiveContainer>
         </div>
 
-        <div className="space-y-3 lg:max-h-[20rem] lg:overflow-y-auto lg:pr-2 scrollbar-thin">
+        <div className="space-y-3 2xl:max-h-[20rem] 2xl:overflow-y-auto 2xl:pr-2 scrollbar-thin">
           {data.map((item, index) => {
             const share = totalSolvedAcrossTags > 0 ? Math.round((item.count / totalSolvedAcrossTags) * 100) : 0;
 

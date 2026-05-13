@@ -147,6 +147,73 @@ class Get_data:
             return None
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
 
+    @classmethod
+    def search_problemset(
+        cls,
+        query: str = "",
+        tag: str | None = None,
+        min_rating: int | None = None,
+        max_rating: int | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {}
+        if tag and tag != "all":
+            params["tags"] = tag
+
+        payload = cls._request("/problemset.problems", params)
+        problems = payload.get("result", {}).get("problems", [])
+        statistics = payload.get("result", {}).get("problemStatistics", [])
+        solved_lookup = {
+            f"{item.get('contestId')}{item.get('index')}": item.get("solvedCount", 0)
+            for item in statistics
+        }
+        normalized_query = query.strip().lower()
+        query_tokens = [token for token in normalized_query.replace("-", " ").split() if token]
+        safe_limit = max(1, min(limit, 100))
+        matched_problems: list[dict[str, Any]] = []
+
+        for problem in problems:
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
+
+            rating = problem.get("rating")
+            if min_rating is not None and (rating is None or rating < min_rating):
+                continue
+            if max_rating is not None and (rating is None or rating > max_rating):
+                continue
+
+            tags = problem.get("tags", [])
+            problem_id = f"{contest_id}{index}"
+            haystack = " ".join([
+                str(problem.get("name", "")),
+                str(contest_id),
+                str(index),
+                problem_id,
+                str(rating or ""),
+                " ".join(tags),
+            ]).lower()
+
+            if query_tokens and not all(token in haystack for token in query_tokens):
+                continue
+
+            matched_problems.append({
+                "id": problem_id,
+                "name": problem.get("name", problem_id),
+                "rating": rating,
+                "tags": tags,
+                "contestId": contest_id,
+                "index": index,
+                "url": cls.problem_url(contest_id, index),
+                "solvedCount": solved_lookup.get(problem_id, 0),
+            })
+
+            if len(matched_problems) >= safe_limit:
+                break
+
+        return matched_problems
+
     def question_tags(self) -> tuple[list[str], list[list[str]]]:
         problems = self.solved_problem_records()
         unique_questions = [problem["id"] for problem in problems]
@@ -207,7 +274,6 @@ class Get_data:
             key=lambda item: item.get("lastTriedAt") or "",
             reverse=True
         )
-
 
 if __name__ == "__main__":
     handle = input("Enter handle: ").strip()

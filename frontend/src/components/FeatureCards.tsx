@@ -1,4 +1,5 @@
 import { ActivityIcon, BarChartIcon, TableIcon, TrophyIcon } from "./icons";
+import { HoverEffect } from "./ui/card-hover-effect";
 
 const FEATURES = [
   {
@@ -18,23 +19,32 @@ const FEATURES = [
   },
   {
     title: "Actionable insights",
-    description: "Highlight strongest tags, weaker areas, and practice suggestions from real API data.",
+    description: "Highlight strongest tags, least represented topics, and neutral observations from real API data.",
     icon: ActivityIcon
   }
 ];
 
 export function FeatureCards() {
+  const hoverItems = FEATURES.map((feature) => ({
+    title: feature.title,
+    description: feature.description,
+    link:
+      feature.title === "Profile-first dashboard"
+        ? "/dashboard/tourist"
+        : feature.title === "Readable analytics"
+          ? "/dashboard/tourist#charts"
+          : feature.title === "Problem explorer"
+            ? "/dashboard/tourist#problems"
+            : "/compare"
+  }));
+
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {FEATURES.map((feature) => (
-        <article key={feature.title} className="card-shell p-6">
-          <div className="inline-flex rounded-2xl bg-primary-soft p-3 text-primary">
-            <feature.icon className="h-5 w-5" />
-          </div>
-          <h2 className="mt-5 font-display text-lg font-semibold tracking-tight">{feature.title}</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{feature.description}</p>
-        </article>
-      ))}
+    <section className="report-shell overflow-hidden p-4">
+      <div className="px-2 pt-2">
+        <p className="eyebrow">Product signals</p>
+        <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight">The report is built around real user signals</h2>
+      </div>
+      <HoverEffect items={hoverItems} className="grid-cols-1 py-4 md:grid-cols-2 xl:grid-cols-4" />
     </section>
   );
 }

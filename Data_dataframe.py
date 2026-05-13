@@ -29,6 +29,7 @@ COMMON_TAGS = [
 
 
 class Dataframe_former:
+    
     def __init__(self, handle: str = "", source: Get_data | None = None):
         if source is not None:
             self.source = source
@@ -162,39 +163,66 @@ class Dataframe_former:
     def strongest_tags(self, limit: int = 3) -> list[str]:
         return [str(item["tag"]) for item in self.tag_count_from_df()[:limit]]
 
-    def weakest_tags(self, limit: int = 3) -> list[str]:
+    def least_represented_tags(self, limit: int = 3) -> list[str]:
         tag_counts = Counter({tag: 0 for tag in COMMON_TAGS})
         tag_counts.update({str(item["tag"]): int(item["count"]) for item in self.tag_count_from_df()})
         tag_priority = {tag: index for index, tag in enumerate(COMMON_TAGS)}
-        weakest = sorted(
+        least_represented = sorted(
             tag_counts.items(),
             key=lambda item: (item[1], tag_priority.get(item[0], len(COMMON_TAGS)))
         )
-        return [tag for tag, _ in weakest[:limit]]
+        return [tag for tag, _ in least_represented[:limit]]
 
-    def recommendations(self) -> list[str]:
-        recommendations: list[str] = []
-        weakest = self.weakest_tags(limit=2)
+    def weakest_tags(self, limit: int = 3) -> list[str]:
+        return self.least_represented_tags(limit)
+
+    def observations(self) -> list[str]:
+        observations: list[str] = []
+        least_represented = self.least_represented_tags(limit=2)
+        strongest = self.strongest_tags(limit=1)
         average_rating = self.average_problem_rating()
+        solved_count = len(self.solved_problems())
+        unsolved_count = len(self.source.unsolved_problem_records())
+        contest_count = self.total_contests()
 
-        if weakest:
-            recommendations.append(
-                f"Practice more {', '.join(weakest)} problems to balance your tag coverage."
+        if least_represented:
+            observations.append(
+                f"{', '.join(least_represented)} appear least often among the common Codeforces tags in accepted submissions."
             )
 
-        if average_rating is not None and average_rating < 1400:
-            recommendations.append(
-                "Mix in one or two slightly higher-rated problems each week to lift your comfort zone."
+        if average_rating is None:
+            observations.append(
+                "No rated accepted problems were found, so an average solved rating is not available yet."
             )
         else:
-            recommendations.append(
-                "Keep alternating comfortable problems with tougher ones so your rating range keeps growing."
+            lower = int(average_rating // 100) * 100
+            upper = lower + 200
+            observations.append(
+                f"The average solved problem rating is around {int(average_rating)}, with most nearby rated context around {lower}-{upper}."
             )
 
-        recommendations.append(
-            "Review recently solved problems after contests to convert familiar patterns into faster future solves."
-        )
-        return recommendations
+        if unsolved_count > 0:
+            observations.append(
+                f"{unsolved_count} attempted problem{'s' if unsolved_count != 1 else ''} do not have an accepted submission in the current data."
+            )
+        elif solved_count > 0:
+            observations.append(
+                "No attempted unsolved problems were found for this handle."
+            )
+
+        if contest_count < 5:
+            observations.append(
+                f"The rating history contains {contest_count} contest{'s' if contest_count != 1 else ''}, so contest trend data is limited."
+            )
+        elif strongest:
+            observations.append(
+                f"{strongest[0]} appears most often among the strongest accepted-submission tags."
+            )
+
+        return observations[:4]
+
+    def recommendations(self) -> list[str]:
+        return self.observations()
 
     def activity_trend(self, months: int = 6) -> list[dict[str, int | str]]:
         questions = self.solved_problems_dataframe()
@@ -243,7 +271,9 @@ class Dataframe_former:
             "averageProblemRating": self.average_problem_rating(),
             "mostSolvedTag": self.most_solved_tag(),
             "strongestTags": self.strongest_tags(),
+            "leastRepresentedTags": self.least_represented_tags(),
             "weakestTags": self.weakest_tags(),
+            "observations": self.observations(),
             "recommendations": self.recommendations(),
             "activityTrend": self.activity_trend()
         }
