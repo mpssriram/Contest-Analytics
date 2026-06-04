@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
-import { GlobalProblemSearch } from "../components/GlobalProblemSearch";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { LoadingDashboard } from "../components/LoadingDashboard";
 import { ProblemsTable } from "../components/ProblemsTable";
@@ -169,8 +168,6 @@ export function Dashboard() {
           }
         ]}
       />
-
-      <GlobalProblemSearch />
 
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-5 py-4 text-sm text-slate-500 dark:text-slate-400">
         <div className="flex flex-wrap items-center gap-4">
