@@ -35,6 +35,17 @@ export interface UnsolvedProblem {
   language: string | null;
 }
 
+export interface GlobalProblem {
+  id: string;
+  name: string;
+  rating: number | null;
+  tags: string[];
+  contestId: number;
+  index: string;
+  url: string | null;
+  solvedCount: number;
+}
+
 export interface TagStat {
   tag: string;
   count: number;
@@ -66,10 +77,12 @@ export interface SummaryResponse {
   averageProblemRating: number | null;
   mostSolvedTag: string | null;
   strongestTags: string[];
+  leastRepresentedTags: string[];
   weakestTags: string[];
+  observations: string[];
   recommendations: string[];
   activityTrend: ActivityPoint[];
-  trackedHandle?: TrackedHandle;
+  trackedHandle: TrackedHandle | null;
 }
 
 export interface DashboardData {
@@ -79,4 +92,20 @@ export interface DashboardData {
   ratingStats: RatingStat[];
   solvedProblems: SolvedProblem[];
   unsolvedProblems: UnsolvedProblem[];
+}
+
+export interface CompareUser {
+  profile: ProfileResponse;
+  summary: SummaryResponse;
+  uniqueSolvedCount: number;
+}
+
+export interface CompareData {
+  left: CompareUser;
+  right: CompareUser;
+  commonSolvedCount: number;
+  commonStrongTags: string[];
+  commonProblems: SolvedProblem[];
+  leftUniqueProblems: SolvedProblem[];
+  rightUniqueProblems: SolvedProblem[];
 }

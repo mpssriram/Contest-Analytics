@@ -7,13 +7,13 @@
 @layer base {
   :root {
     color-scheme: light;
-    --background: 210 33% 98%;
+    --background: 210 24% 97%;
     --foreground: 222 47% 11%;
     --surface: 0 0% 100%;
-    --surface-muted: 210 40% 96%;
-    --border: 214 32% 91%;
-    --primary: 217 91% 60%;
-    --primary-soft: 214 100% 96%;
+    --surface-muted: 214 32% 95%;
+    --border: 215 24% 88%;
+    --primary: 214 84% 48%;
+    --primary-soft: 214 86% 94%;
     --primary-foreground: 210 40% 98%;
     --secondary: 222 47% 12%;
     --secondary-foreground: 210 40% 98%;
@@ -53,9 +53,8 @@
     @apply bg-background font-sans text-foreground antialiased;
     min-height: 100vh;
     background-image:
-      radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 28%),
-      radial-gradient(circle at top right, rgba(20, 184, 166, 0.1), transparent 24%),
-      linear-gradient(to bottom, transparent, rgba(148, 163, 184, 0.04));
+      linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(241, 245, 249, 0.88)),
+      linear-gradient(90deg, rgba(37, 99, 235, 0.06), transparent 34%, rgba(20, 184, 166, 0.05));
   }
 
   ::selection {
@@ -65,7 +64,152 @@
 
 @layer components {
   .card-shell {
-    @apply rounded-3xl border border-border bg-surface/90 shadow-soft backdrop-blur-sm;
+    @apply rounded-2xl border border-border bg-surface shadow-soft;
+  }
+
+  .report-shell {
+    @apply rounded-2xl border border-border bg-surface shadow-soft;
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+
+  .report-band {
+    @apply border-b border-border bg-surface-muted/80 px-5 py-4;
+  }
+
+  .report-body {
+    @apply p-5 sm:p-6;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400;
+  }
+
+  .metric-panel {
+    @apply rounded-xl border border-border bg-surface-muted p-4;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.12), transparent 32%);
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+
+  .metric-panel:hover::before {
+    opacity: 1;
+  }
+
+  .hover-lift {
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease,
+      background-color 180ms ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+  }
+
+  .dark .hover-lift:hover {
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  }
+
+  .gooey-search {
+    position: relative;
+    isolation: isolate;
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+
+  .gooey-search::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--mouse-x, 24%) 50%, hsl(var(--primary) / 0.2), transparent 42%);
+    opacity: 0;
+    filter: blur(8px);
+    transition: opacity 180ms ease;
+  }
+
+  .gooey-search:focus-within {
+    border-color: hsl(var(--primary) / 0.5);
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.1);
+  }
+
+  .gooey-search:focus-within::after {
+    opacity: 1;
+  }
+
+  .explorer-search {
+    position: relative;
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      background-color 180ms ease;
+  }
+
+  .explorer-search::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.34), hsl(var(--accent) / 0.24));
+    opacity: 0;
+    filter: blur(14px);
+    transition: opacity 180ms ease;
+  }
+
+  .explorer-search:focus-within {
+    border-color: hsl(var(--primary) / 0.55);
+    background: hsl(var(--surface));
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.1);
+  }
+
+  .explorer-search:focus-within::before {
+    opacity: 1;
+  }
+
+  .tab-strip {
+    position: relative;
+  }
+
+  .tab-pill {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tab-pill::after {
+    content: "";
+    position: absolute;
+    inset: auto 18% 0;
+    height: 2px;
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+    opacity: 0;
+    transform: scaleX(0.4);
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease;
+  }
+
+  .tab-pill:hover::after {
+    opacity: 0.6;
+    transform: scaleX(1);
   }
 
   .section-title {
@@ -78,7 +222,30 @@
 
   .grid-fade {
     background-image: theme("backgroundImage.grid-fade");
-    background-size: 36px 36px;
+    background-size: 32px 32px;
+  }
+
+  .dot-field {
+    background-image:
+      radial-gradient(circle at center, hsl(var(--primary) / 0.22) 1px, transparent 1.5px),
+      radial-gradient(circle at 50% 50%, hsl(var(--accent) / 0.12), transparent 36%);
+    background-position:
+      0 0,
+      center;
+    background-size:
+      28px 28px,
+      100% 100%;
+    opacity: 0.32;
+    mask-image: linear-gradient(to bottom, black, transparent 78%);
+    animation: dot-drift 18s linear infinite;
+  }
+
+  .page-reveal {
+    animation: reveal-up 460ms ease both;
+  }
+
+  .reveal-panel {
+    animation: reveal-up 560ms ease both;
   }
 }
 
@@ -100,5 +267,42 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: rgba(148, 163, 184, 0.35);
     border-radius: 9999px;
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dot-drift {
+  from {
+    background-position:
+      0 0,
+      center;
+  }
+
+  to {
+    background-position:
+      28px 28px,
+      center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
   }
 }

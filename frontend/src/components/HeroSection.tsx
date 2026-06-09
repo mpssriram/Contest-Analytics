@@ -1,5 +1,6 @@
 import { SearchBar } from "./SearchBar";
 import { ActivityIcon, BarChartIcon, SparklesIcon, TagsIcon } from "./icons";
+import { EncryptedText } from "./ui/encrypted-text";
 
 interface HeroSectionProps {
   onAnalyze: (handle: string) => void;
@@ -18,7 +19,13 @@ export function HeroSection({ onAnalyze }: HeroSectionProps) {
 
           <div className="space-y-4">
             <h1 className="max-w-3xl font-display text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Contest Analytics
+              <EncryptedText
+                text="Contest Analytics"
+                revealDelayMs={35}
+                flipDelayMs={28}
+                encryptedClassName="text-primary"
+                revealedClassName="text-foreground"
+              />
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
               Analyze your Codeforces problem-solving journey with a polished dashboard for tags, ratings,

@@ -16,7 +16,7 @@ export function RatingBarChart({ data }: RatingBarChartProps) {
   }
 
   return (
-    <section className="card-shell p-6">
+    <section className="card-shell min-w-0 p-6">
       <h3 className="section-title">Rating Breakdown</h3>
       <p className="mt-2 muted-copy">See how solved problems are spread across Codeforces rating buckets.</p>
       <div className="mt-6 h-[20rem]">

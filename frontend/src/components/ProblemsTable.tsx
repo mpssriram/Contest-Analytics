@@ -1,7 +1,12 @@
-import { useDeferredValue, useState } from "react";
-import type { SolvedProblem, UnsolvedProblem } from "../types/analytics";
+import { FormEvent, Fragment, useDeferredValue, useState } from "react";
+import type { GlobalProblem, SolvedProblem, UnsolvedProblem } from "../types/analytics";
+import { fetchGlobalProblems } from "../services/api";
 import { formatDate, formatRating, toTitleCase } from "../utils/formatters";
 import { SearchIcon, TableIcon } from "./icons";
+import { ProblemCard } from "./ProblemCard";
+import { TagList } from "./TagList";
+
+const QUICK_TAGS = ["all", "dp", "greedy", "math", "graphs", "implementation", "data structures", "binary search"];
 
 interface ProblemsTableProps {
   problems: Array<SolvedProblem | UnsolvedProblem>;
@@ -9,6 +14,124 @@ interface ProblemsTableProps {
   title?: string;
   description?: string;
   dateLabel?: string;
+  problemSets?: ProblemSet[];
+  sectionId?: string;
+}
+
+interface ProblemSet {
+  id: string;
+  label: string;
+  problems: Array<SolvedProblem | UnsolvedProblem>;
+  title: string;
+  description: string;
+  dateLabel: string;
+}
+
+function isUnsolvedProblem(problem: SolvedProblem | UnsolvedProblem): problem is UnsolvedProblem {
+  return "lastTriedAt" in problem;
+}
+
+function UnsolvedAttemptSummary({ problems }: { problems: UnsolvedProblem[] }) {
+  const ratedProblems = problems.filter((problem) => problem.rating !== null);
+  const averageRating =
+    ratedProblems.length > 0
+      ? Math.round(ratedProblems.reduce((sum, problem) => sum + (problem.rating || 0), 0) / ratedProblems.length)
+      : null;
+  const hardestProblem = ratedProblems.reduce<UnsolvedProblem | null>((currentHardest, problem) => {
+    if (!currentHardest || (problem.rating || 0) > (currentHardest.rating || 0)) {
+      return problem;
+    }
+
+    return currentHardest;
+  }, null);
+  const verdictCounts = problems.reduce<Record<string, number>>((counts, problem) => {
+    const verdict = problem.verdict || "Unknown";
+    counts[verdict] = (counts[verdict] || 0) + 1;
+    return counts;
+  }, {});
+  const topVerdicts = Object.entries(verdictCounts)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 4);
+  const tagCounts = problems.flatMap((problem) => problem.tags).reduce<Record<string, number>>((counts, tag) => {
+    counts[tag] = (counts[tag] || 0) + 1;
+    return counts;
+  }, {});
+  const topTags = Object.entries(tagCounts)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([tag]) => tag);
+  const recentProblems = [...problems]
+    .sort((left, right) => {
+      const leftTime = left.lastTriedAt ? new Date(left.lastTriedAt).getTime() : 0;
+      const rightTime = right.lastTriedAt ? new Date(right.lastTriedAt).getTime() : 0;
+      return rightTime - leftTime;
+    })
+    .slice(0, 3);
+
+  return (
+    <div className="mt-5 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="hover-lift rounded-xl border border-border bg-surface-muted p-4">
+        <p className="eyebrow">Unsolved attempt summary</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Total</p>
+            <p className="mt-1 text-2xl font-semibold">{problems.length}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Avg rating</p>
+            <p className="mt-1 text-2xl font-semibold">{formatRating(averageRating)}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Hardest</p>
+            <p className="mt-1 text-2xl font-semibold">{formatRating(hardestProblem?.rating)}</p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Most represented tags</p>
+          <TagList tags={topTags} emptyLabel="No tags available." className="mt-2" />
+        </div>
+      </div>
+
+      <div className="hover-lift rounded-xl border border-border bg-surface-muted p-4">
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Verdict distribution</p>
+        <div className="mt-3 grid gap-2">
+          {topVerdicts.length > 0 ? (
+            topVerdicts.map(([verdict, count]) => (
+              <div key={verdict} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                <span className="font-medium">{verdict.replace(/_/g, " ")}</span>
+                <span className="text-slate-500 dark:text-slate-400">{count}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">No verdict data available.</p>
+          )}
+        </div>
+      </div>
+
+      {recentProblems.length > 0 ? (
+        <div className="hover-lift rounded-xl border border-border bg-surface-muted p-4 lg:col-span-2">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Recent attempted unsolved problems</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            {recentProblems.map((problem) => (
+              <a
+                key={problem.id}
+                href={problem.url || `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`}
+                target="_blank"
+                rel="noreferrer"
+                className="hover-lift rounded-lg border border-border bg-surface px-3 py-3 text-sm transition hover:border-primary/40"
+              >
+                <p className="font-medium text-foreground">{problem.name}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {formatRating(problem.rating)} / {formatDate(problem.lastTriedAt)}
+                </p>
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function ProblemsTable({
@@ -16,47 +139,115 @@ export function ProblemsTable({
   headingLabel = "Problems",
   title = "Search and filter problems",
   description = "Quickly scan problem names, ratings, tags, and contest links.",
-  dateLabel = "Date"
+  dateLabel = "Date",
+  problemSets,
+  sectionId
 }: ProblemsTableProps) {
+  const [activeSetId, setActiveSetId] = useState(problemSets?.[0]?.id || "default");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState("all");
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [globalTag, setGlobalTag] = useState("all");
+  const [minRating, setMinRating] = useState("");
+  const [maxRating, setMaxRating] = useState("");
+  const [globalProblems, setGlobalProblems] = useState<GlobalProblem[]>([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [hasGlobalSearch, setHasGlobalSearch] = useState(false);
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
+  const isGlobalSearchActive = activeSetId === "global";
+  const selectedProblemSet = problemSets?.find((problemSet) => problemSet.id === activeSetId);
+  const activeSet = selectedProblemSet || {
+    id: "default",
+    label: headingLabel,
+    problems,
+    title: isGlobalSearchActive ? "Global search" : title,
+    description: isGlobalSearchActive
+      ? "Search the full Codeforces problemset by problem, tag, contest, index, and rating range."
+      : description,
+    dateLabel
+  };
 
-  const tagOptions = Array.from(new Set(problems.flatMap((problem) => problem.tags))).sort((left, right) =>
+  const tagOptions = Array.from(new Set(activeSet.problems.flatMap((problem) => problem.tags))).sort((left, right) =>
     left.localeCompare(right)
   );
 
-  const filteredProblems = problems.filter((problem) => {
+  const filteredProblems = activeSet.problems.filter((problem) => {
     const matchesSearch =
       deferredSearchTerm.length === 0 ||
       problem.name.toLowerCase().includes(deferredSearchTerm) ||
       problem.contestId.toString().includes(deferredSearchTerm) ||
+      problem.index.toLowerCase().includes(deferredSearchTerm) ||
+      (problem.rating !== null && problem.rating.toString().includes(deferredSearchTerm)) ||
+      ("language" in problem && (problem.language || "").toLowerCase().includes(deferredSearchTerm)) ||
+      ("verdict" in problem && (problem.verdict || "").toLowerCase().includes(deferredSearchTerm)) ||
       problem.tags.some((tag) => tag.toLowerCase().includes(deferredSearchTerm));
 
     const matchesTag = selectedTag === "all" || problem.tags.includes(selectedTag);
     return matchesSearch && matchesTag;
   });
 
+  const searchGlobalProblems = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setGlobalLoading(true);
+    setGlobalError(null);
+    setHasGlobalSearch(true);
+
+    try {
+      const results = await fetchGlobalProblems({
+        query: globalQuery,
+        tag: globalTag,
+        minRating,
+        maxRating,
+        limit: 12
+      });
+      setGlobalProblems(results);
+    } catch (requestError) {
+      setGlobalProblems([]);
+      setGlobalError(requestError instanceof Error ? requestError.message : "Unable to search Codeforces problems right now.");
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  const globalSearchTab = (
+    <button
+      type="button"
+      onClick={() => {
+        setActiveSetId("global");
+        setSelectedTag("all");
+      }}
+      className={`tab-pill rounded-lg px-4 py-2 text-sm font-semibold transition ${
+        isGlobalSearchActive
+          ? "bg-secondary text-secondary-foreground"
+          : "text-slate-600 hover:text-foreground dark:text-slate-300"
+      }`}
+    >
+      Global search
+    </button>
+  );
+
   return (
-    <section className="card-shell p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <section id={sectionId} className="report-shell overflow-hidden reveal-panel">
+      <div className="report-band flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
             <TableIcon className="h-4 w-4 text-primary" />
             {headingLabel}
           </div>
-          <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight">{title}</h3>
-          <p className="mt-2 muted-copy">{description}</p>
+          <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight">{activeSet.title}</h3>
+          <p className="mt-2 muted-copy">{activeSet.description}</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,20rem)_12rem]">
-          <label className="flex items-center gap-3 rounded-2xl border border-border bg-surface-muted px-4 py-3 text-sm">
-            <SearchIcon className="h-4 w-4 text-slate-400" />
+        {!isGlobalSearchActive ? (
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,24rem)_12rem]">
+          <label className="explorer-search flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm">
+            <SearchIcon className="h-4 w-4 text-primary" />
             <input
               type="text"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search by problem, tag, or contest"
+              placeholder="Search name, tag, rating, index, verdict"
               className="w-full border-none bg-transparent outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </label>
@@ -64,7 +255,7 @@ export function ProblemsTable({
           <select
             value={selectedTag}
             onChange={(event) => setSelectedTag(event.target.value)}
-            className="rounded-2xl border border-border bg-surface-muted px-4 py-3 text-sm outline-none"
+            className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none"
           >
             <option value="all">All tags</option>
             {tagOptions.map((tag) => (
@@ -74,18 +265,125 @@ export function ProblemsTable({
             ))}
           </select>
         </div>
+        ) : null}
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-3xl border border-border">
+      <div className="report-body">
+      {problemSets && problemSets.length > 1 ? (
+        <div className="tab-strip flex flex-wrap gap-2 rounded-xl border border-border bg-surface-muted p-1.5">
+          {problemSets.map((problemSet) => {
+            const isActive = problemSet.id === activeSet.id;
+
+            return (
+              <Fragment key={problemSet.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSetId(problemSet.id);
+                  setSelectedTag("all");
+                }}
+                className={`tab-pill rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  isActive
+                    ? "bg-secondary text-secondary-foreground"
+                    : "text-slate-600 hover:text-foreground dark:text-slate-300"
+                }`}
+              >
+                {problemSet.label}
+                <span className="ml-2 rounded-full bg-surface px-2 py-0.5 text-xs text-slate-500 dark:bg-surface-muted dark:text-slate-300">
+                  {problemSet.problems.length}
+                </span>
+              </button>
+              {problemSet.id === "solved" ? globalSearchTab : null}
+              </Fragment>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {isGlobalSearchActive ? (
+        <div className="mt-5">
+        <form onSubmit={searchGlobalProblems} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_12rem_8rem_8rem_auto]">
+          <label className="explorer-search flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm">
+            <SearchIcon className="h-4 w-4 text-primary" />
+            <input
+              type="text"
+              value={globalQuery}
+              onChange={(event) => setGlobalQuery(event.target.value)}
+              placeholder="Search problem, tag, contest, index"
+              className="w-full border-none bg-transparent outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+          </label>
+
+          <select
+            value={globalTag}
+            onChange={(event) => setGlobalTag(event.target.value)}
+            className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none"
+          >
+            {QUICK_TAGS.map((tagOption) => (
+              <option key={tagOption} value={tagOption}>
+                {tagOption === "all" ? "All tags" : toTitleCase(tagOption)}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="number"
+            value={minRating}
+            onChange={(event) => setMinRating(event.target.value)}
+            placeholder="Min"
+            className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none placeholder:text-slate-400"
+          />
+
+          <input
+            type="number"
+            value={maxRating}
+            onChange={(event) => setMaxRating(event.target.value)}
+            placeholder="Max"
+            className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none placeholder:text-slate-400"
+          />
+
+          <button
+            type="submit"
+            disabled={globalLoading}
+            className="rounded-xl bg-secondary px-5 py-3 text-sm font-semibold text-secondary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {globalLoading ? "Searching..." : "Search"}
+          </button>
+        </form>
+
+        {globalError ? (
+          <p className="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{globalError}</p>
+        ) : null}
+
+        {globalProblems.length > 0 ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {globalProblems.map((problem) => (
+              <ProblemCard key={problem.id} {...problem} />
+            ))}
+          </div>
+        ) : hasGlobalSearch && !globalLoading && !globalError ? (
+          <p className="mt-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+            No global Codeforces problems matched those filters.
+          </p>
+        ) : null}
+      </div>
+      ) : null}
+
+      {!isGlobalSearchActive && activeSet.id === "unsolved" ? (
+        <UnsolvedAttemptSummary problems={activeSet.problems.filter(isUnsolvedProblem)} />
+      ) : null}
+
+      {!isGlobalSearchActive ? (
+      <div className="mt-5 overflow-hidden rounded-xl border border-border">
         <div className="scrollbar-thin overflow-x-auto">
           <table className="min-w-full divide-y divide-border text-left">
-            <thead className="bg-surface-muted">
+            <thead className="bg-surface-muted/90">
               <tr>
                 <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Problem</th>
                 <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Rating</th>
                 <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tags</th>
                 <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contest</th>
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{dateLabel}</th>
+                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{activeSet.dateLabel}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border bg-surface">
@@ -97,7 +395,7 @@ export function ProblemsTable({
                     : problem.verdict || "Not solved yet";
 
                   return (
-                    <tr key={problem.id} className="align-top">
+                    <tr key={problem.id} className="align-top transition-colors hover:bg-surface-muted/55">
                       <td className="px-5 py-4">
                         <a
                           href={problem.url || `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`}
@@ -111,13 +409,7 @@ export function ProblemsTable({
                       </td>
                       <td className="px-5 py-4 text-sm font-medium">{formatRating(problem.rating)}</td>
                       <td className="px-5 py-4">
-                        <div className="flex max-w-[24rem] flex-wrap gap-2">
-                          {problem.tags.map((tag) => (
-                            <span key={tag} className="rounded-full border border-border bg-surface-muted px-3 py-1 text-xs font-medium">
-                              {toTitleCase(tag)}
-                            </span>
-                          ))}
-                        </div>
+                        <TagList tags={problem.tags} className="max-w-[24rem]" tagClassName="bg-surface-muted" />
                       </td>
                       <td className="px-5 py-4 text-sm">
                         <div className="font-medium">{problem.contestId}</div>
@@ -137,6 +429,8 @@ export function ProblemsTable({
             </tbody>
           </table>
         </div>
+      </div>
+      ) : null}
       </div>
     </section>
   );

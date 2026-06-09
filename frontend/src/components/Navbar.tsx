@@ -26,6 +26,7 @@ export function Navbar({ theme, onToggleTheme }: NavbarProps) {
           <nav className="hidden items-center gap-2 rounded-full border border-border bg-surface/80 p-1.5 sm:flex">
             {[
               { to: "/", label: "Home" },
+              { to: "/compare", label: "Compare" },
               { to: "/dashboard/tourist", label: "Demo" }
             ].map((item) => (
               <NavLink
