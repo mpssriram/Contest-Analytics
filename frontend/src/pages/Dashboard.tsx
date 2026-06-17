@@ -141,6 +141,7 @@ export function Dashboard() {
         problems={data.solvedProblems}
         headingLabel="Problem Explorer"
         sectionId="problems"
+        handle={handle}
         problemSets={[
           {
             id: "all",

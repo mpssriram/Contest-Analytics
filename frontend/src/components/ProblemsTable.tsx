@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useDeferredValue, useState } from "react";
+import { FormEvent, Fragment, useDeferredValue, useEffect, useState } from "react";
 import type { GlobalProblem, SolvedProblem, UnsolvedProblem } from "../types/analytics";
 import { fetchGlobalProblems } from "../services/api";
 import { formatDate, formatRating, toTitleCase } from "../utils/formatters";
@@ -16,6 +16,7 @@ interface ProblemsTableProps {
   dateLabel?: string;
   problemSets?: ProblemSet[];
   sectionId?: string;
+  handle?: string;
 }
 
 interface ProblemSet {
@@ -29,6 +30,30 @@ interface ProblemSet {
 
 function isUnsolvedProblem(problem: SolvedProblem | UnsolvedProblem): problem is UnsolvedProblem {
   return "lastTriedAt" in problem;
+}
+
+// Per-handle personal "verified" checklist, persisted in localStorage so the
+// user's manual toggles survive reloads and stay independent per handle.
+function verifiedStorageKey(handle?: string): string {
+  return `contest-analytics:verified:${(handle || "").trim().toLowerCase()}`;
+}
+
+function readVerifiedIds(handle?: string): Set<string> {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
+  try {
+    const stored = window.localStorage.getItem(verifiedStorageKey(handle));
+    if (!stored) {
+      return new Set();
+    }
+
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? new Set(parsed.map(String)) : new Set();
+  } catch {
+    return new Set();
+  }
 }
 
 function UnsolvedAttemptSummary({ problems }: { problems: UnsolvedProblem[] }) {
@@ -141,9 +166,11 @@ export function ProblemsTable({
   description = "Quickly scan problem names, ratings, tags, and contest links.",
   dateLabel = "Date",
   problemSets,
-  sectionId
+  sectionId,
+  handle
 }: ProblemsTableProps) {
   const [activeSetId, setActiveSetId] = useState(problemSets?.[0]?.id || "default");
+  const [verifiedIds, setVerifiedIds] = useState<Set<string>>(() => readVerifiedIds(handle));
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState("all");
   const [globalQuery, setGlobalQuery] = useState("");
@@ -172,12 +199,17 @@ export function ProblemsTable({
     left.localeCompare(right)
   );
 
+  // Combined problem ID like "4A": strip separators so "4-A", "4 A", "4a" all match.
+  const normalizedSearch = deferredSearchTerm.replace(/[^a-z0-9]/g, "");
+
   const filteredProblems = activeSet.problems.filter((problem) => {
+    const problemId = `${problem.contestId}${problem.index}`.toLowerCase();
     const matchesSearch =
       deferredSearchTerm.length === 0 ||
       problem.name.toLowerCase().includes(deferredSearchTerm) ||
       problem.contestId.toString().includes(deferredSearchTerm) ||
       problem.index.toLowerCase().includes(deferredSearchTerm) ||
+      (normalizedSearch.length > 0 && problemId.includes(normalizedSearch)) ||
       (problem.rating !== null && problem.rating.toString().includes(deferredSearchTerm)) ||
       ("language" in problem && (problem.language || "").toLowerCase().includes(deferredSearchTerm)) ||
       ("verdict" in problem && (problem.verdict || "").toLowerCase().includes(deferredSearchTerm)) ||
@@ -186,6 +218,33 @@ export function ProblemsTable({
     const matchesTag = selectedTag === "all" || problem.tags.includes(selectedTag);
     return matchesSearch && matchesTag;
   });
+
+  // Re-load the checklist when the handle changes (React Router keeps this
+  // component mounted while navigating between dashboards).
+  useEffect(() => {
+    setVerifiedIds(readVerifiedIds(handle));
+  }, [handle]);
+
+  const toggleVerified = (problemId: string) => {
+    setVerifiedIds((current) => {
+      const next = new Set(current);
+      if (next.has(problemId)) {
+        next.delete(problemId);
+      } else {
+        next.add(problemId);
+      }
+
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(verifiedStorageKey(handle), JSON.stringify(Array.from(next)));
+        } catch {
+          // Ignore storage failures (private mode / quota) — toggle still works in-session.
+        }
+      }
+
+      return next;
+    });
+  };
 
   const searchGlobalProblems = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -384,15 +443,18 @@ export function ProblemsTable({
                 <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Tags</th>
                 <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contest</th>
                 <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{activeSet.dateLabel}</th>
+                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Verified</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border bg-surface">
               {filteredProblems.length > 0 ? (
                 filteredProblems.map((problem) => {
                   const activityDate = "solvedAt" in problem ? problem.solvedAt : problem.lastTriedAt;
-                  const problemMeta = "solvedAt" in problem
+                  const isSolved = "solvedAt" in problem;
+                  const problemMeta = isSolved
                     ? problem.language || "Codeforces submission"
                     : problem.verdict || "Not solved yet";
+                  const isVerified = verifiedIds.has(problem.id);
 
                   return (
                     <tr key={problem.id} className="align-top transition-colors hover:bg-surface-muted/55">
@@ -416,12 +478,30 @@ export function ProblemsTable({
                         <div className="text-slate-500 dark:text-slate-400">Index {problem.index}</div>
                       </td>
                       <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{formatDate(activityDate)}</td>
+                      <td className="px-5 py-4 text-sm">
+                        {isSolved ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleVerified(problem.id)}
+                            aria-pressed={isVerified}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                              isVerified
+                                ? "border-primary/30 bg-primary/10 text-primary"
+                                : "border-border bg-surface-muted text-slate-600 hover:border-primary/40 hover:text-foreground dark:text-slate-300"
+                            }`}
+                          >
+                            {isVerified ? "✓ Verified" : "Verify"}
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-500">—</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                     No problems match your current search or tag filter.
                   </td>
                 </tr>
