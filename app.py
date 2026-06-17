@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
@@ -28,7 +29,16 @@ ALLOWED_ORIGINS = [
 if FRONTEND_URL:
     ALLOWED_ORIGINS.append(FRONTEND_URL)
 
-app = FastAPI(title="Contest Analytics API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        create_tables()
+    except Exception as error:
+        print(f"Startup warning: could not create tables: {error}")
+    yield
+
+
+app = FastAPI(title="Contest Analytics API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -39,14 +49,6 @@ app.add_middleware(
 )
 
 api_router = APIRouter(prefix="/api", tags=["Contest Analytics"])
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    try:
-        create_tables()
-    except Exception as error:
-        print(f"Startup warning: could not create tables: {error}")
 
 
 @app.get("/health")

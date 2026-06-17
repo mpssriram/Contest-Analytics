@@ -164,8 +164,11 @@ class Dataframe_former:
         return [str(item["tag"]) for item in self.tag_count_from_df()[:limit]]
 
     def least_represented_tags(self, limit: int = 3) -> list[str]:
-        tag_counts = Counter({tag: 0 for tag in COMMON_TAGS})
-        tag_counts.update({str(item["tag"]): int(item["count"]) for item in self.tag_count_from_df()})
+        # Only consider the common reference tags. Counting non-common tags here
+        # would let a single solve of an obscure tag rank as "least represented",
+        # contradicting the observation text below.
+        solved_counts = {str(item["tag"]): int(item["count"]) for item in self.tag_count_from_df()}
+        tag_counts = Counter({tag: solved_counts.get(tag, 0) for tag in COMMON_TAGS})
         tag_priority = {tag: index for index, tag in enumerate(COMMON_TAGS)}
         least_represented = sorted(
             tag_counts.items(),

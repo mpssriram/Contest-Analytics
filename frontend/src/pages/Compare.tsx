@@ -19,10 +19,6 @@ function percent(part: number, total: number): number {
   return Math.round((part / total) * 100);
 }
 
-function ratingValue(value: number | null): number {
-  return value ?? 0;
-}
-
 function problemMatchesSearch(
   problem: { name: string; contestId: number; index: string; rating: number | null; tags: string[] },
   query: string
@@ -163,7 +159,10 @@ export function Compare() {
     const rightSolved = data.right.summary.totalSolved;
     const largerSolvedSet = Math.max(leftSolved, rightSolved);
     const overlapRate = percent(data.commonSolvedCount, largerSolvedSet);
-    const ratingGap = ratingValue(data.left.summary.averageProblemRating) - ratingValue(data.right.summary.averageProblemRating);
+    const leftAvgRating = data.left.summary.averageProblemRating;
+    const rightAvgRating = data.right.summary.averageProblemRating;
+    const ratingGap =
+      leftAvgRating === null || rightAvgRating === null ? null : leftAvgRating - rightAvgRating;
     const contestGap = data.left.summary.totalContests - data.right.summary.totalContests;
     const uniqueLeader =
       data.left.uniqueSolvedCount === data.right.uniqueSolvedCount
@@ -304,8 +303,16 @@ export function Compare() {
               />
               <SignalCard
                 label="Avg rating gap"
-                value={`${comparisonSignals.ratingGap > 0 ? "+" : ""}${Math.round(comparisonSignals.ratingGap)}`}
-                detail={`Positive means ${data.left.profile.handle} has the higher solved-problem average.`}
+                value={
+                  comparisonSignals.ratingGap === null
+                    ? "N/A"
+                    : `${comparisonSignals.ratingGap > 0 ? "+" : ""}${Math.round(comparisonSignals.ratingGap)}`
+                }
+                detail={
+                  comparisonSignals.ratingGap === null
+                    ? "One handle has no rated solved problems yet, so an average gap is not available."
+                    : `Positive means ${data.left.profile.handle} has the higher solved-problem average.`
+                }
               />
               <SignalCard
                 label="Contest gap"

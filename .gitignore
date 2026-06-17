@@ -1,5 +1,37 @@
-﻿__pycache__/
-*.pyc
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
 .venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
 frontend/node_modules/
 frontend/dist/
+
+# TypeScript / build artifacts
+*.tsbuildinfo
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+
+# Logs
+*.log
+
+# Claude Code
+CLAUDE.md
+.claude/

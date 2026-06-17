@@ -194,7 +194,7 @@ npm install
 Create a `.env` file inside `frontend/`:
 
 ```env
-VITE_API_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
 ### 8. Start the frontend
@@ -227,6 +227,10 @@ Railway start command:
 uvicorn app:app --host 0.0.0.0 --port $PORT
 ```
 
+Run the backend single-worker (do not add `--workers`). The Codeforces rate
+limiter and response cache are in-process, so multiple workers would each
+throttle independently and collectively exceed the Codeforces rate limit.
+
 ### Frontend
 
 Vercel is used for the React frontend.
@@ -241,7 +245,7 @@ Recommended Vercel settings:
 Frontend environment variable:
 
 ```env
-VITE_API_URL=https://your-backend-domain.up.railway.app
+VITE_API_BASE_URL=https://your-backend-domain.up.railway.app
 ```
 
 ## My Contribution

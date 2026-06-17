@@ -9,6 +9,12 @@ from typing import Any
 import requests
 
 
+# NOTE: The throttle and cache below are process-local module state. They keep
+# this process under the Codeforces ~1 request / 2s limit, but they are NOT
+# shared across workers. Run the app single-worker (e.g. `uvicorn app:app`
+# without `--workers`); multiple workers would each throttle independently and
+# collectively exceed the rate limit. A cross-process limiter would need shared
+# state (Redis / file lock), which is out of scope for this app's scale.
 MIN_REQUEST_INTERVAL_SECONDS = 2.05
 RESPONSE_CACHE_TTL_SECONDS = 30.0
 MAX_REQUEST_ATTEMPTS = 4
@@ -16,6 +22,9 @@ INITIAL_BACKOFF_SECONDS = 1.0
 MAX_BACKOFF_SECONDS = 16.0
 _request_lock = threading.Lock()
 _last_request_started_at = 0.0
+# Cached payloads are treated as read-only: callers must not mutate the returned
+# dict in place (they build fresh records instead), so we can store and return
+# references directly without an expensive deep copy.
 _response_cache: dict[tuple[str, tuple[tuple[str, str], ...]], tuple[float, dict[str, Any]]] = {}
 
 
@@ -53,13 +62,13 @@ class Get_data:
             _response_cache.pop(cls._cache_key(path, params), None)
             return None
 
-        return json.loads(json.dumps(payload))
+        return payload
 
     @classmethod
     def _store_cached_payload(cls, path: str, params: dict[str, str], payload: dict[str, Any]) -> None:
         _response_cache[cls._cache_key(path, params)] = (
             time.monotonic() + RESPONSE_CACHE_TTL_SECONDS,
-            json.loads(json.dumps(payload)),
+            payload,
         )
 
     @classmethod
