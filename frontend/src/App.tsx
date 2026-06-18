@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import DotGrid from "./components/DotGrid";
 import { Navbar } from "./components/Navbar";
 import { useTheme } from "./hooks/useTheme";
@@ -37,6 +38,7 @@ function App() {
         </Routes>
       </main>
       <Analytics />
+      <SpeedInsights />
     </div>
   );
 }
