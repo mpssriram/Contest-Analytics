@@ -1,13 +1,18 @@
 import os
+from pathlib import Path
+
+import config as cfgq
+
+cfg = cfgq.Config(Path(__file__).resolve().parent / "config.yaml")
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-MYSQL_HOST = os.getenv("MYSQL_HOST")
-MYSQL_PORT = os.getenv("MYSQL_PORT")
-MYSQL_USER = os.getenv("MYSQL_USER")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+MYSQL_HOST = cfg._get("database.host", "localhost")
+MYSQL_PORT = cfg._get("database.port", 3306)
+MYSQL_USER = cfg._get("database.user", "root")
+MYSQL_PASSWORD = cfg._get("database.password", "")
+MYSQL_DATABASE = cfg._get("database.database", "")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL and all(
