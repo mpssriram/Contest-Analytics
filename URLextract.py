@@ -30,6 +30,7 @@ _response_cache: dict[tuple[str, tuple[tuple[str, str], ...]], tuple[float, dict
 
 class CodeforcesAPIError(Exception):
     def __init__(self, message: str, status_code: int = 502):
+        """Store an API error message and its HTTP status code."""
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -40,6 +41,7 @@ class Get_data:
     HEADERS = {"User-Agent": "Contest Analytics/1.0"}
 
     def __init__(self, handles: str):
+        """Create a Codeforces data client for a handle."""
         self.handle = handles.strip()
         if not self.handle:
             raise ValueError("Codeforces handle is required.")
@@ -47,12 +49,16 @@ class Get_data:
         self._user_status_cache: str | None = None
         self._user_rating_cache: str | None = None
 
+    
     @classmethod
     def _cache_key(cls, path: str, params: dict[str, str]) -> tuple[str, tuple[tuple[str, str], ...]]:
+        """Build a stable key for a cached API response."""
         return path, tuple(sorted(params.items()))
 
+    
     @classmethod
     def _get_cached_payload(cls, path: str, params: dict[str, str]) -> dict[str, Any] | None:
+        """Return a valid cached response, or None when no cache entry exists."""
         cache_entry = _response_cache.get(cls._cache_key(path, params))
         if cache_entry is None:
             return None
@@ -66,6 +72,7 @@ class Get_data:
 
     @classmethod
     def _store_cached_payload(cls, path: str, params: dict[str, str], payload: dict[str, Any]) -> None:
+        """Store an API response in the temporary in-memory cache."""
         _response_cache[cls._cache_key(path, params)] = (
             time.monotonic() + RESPONSE_CACHE_TTL_SECONDS,
             payload,
@@ -73,6 +80,7 @@ class Get_data:
 
     @classmethod
     def _wait_for_request_slot(cls) -> None:
+        """Wait until the next outbound API request is allowed."""
         global _last_request_started_at
 
         with _request_lock:
@@ -89,6 +97,7 @@ class Get_data:
         status_code: int | None = None,
         retry_after_header: str | None = None,
     ) -> float:
+        """Calculate exponential retry delay with optional rate-limit guidance."""
         exponential_delay = min(MAX_BACKOFF_SECONDS, INITIAL_BACKOFF_SECONDS * (2 ** attempt))
 
         if status_code == 429 and retry_after_header:
@@ -103,6 +112,7 @@ class Get_data:
 
     @classmethod
     def _request(cls, path: str, params: dict[str, str]) -> dict[str, Any]:
+        """Request JSON data from Codeforces with caching, throttling, and retries."""
         cached_payload = cls._get_cached_payload(path, params)
         if cached_payload is not None:
             return cached_payload
@@ -167,6 +177,7 @@ class Get_data:
         )
 
     def user_info(self) -> dict[str, Any]:
+        """Fetch and return the user's Codeforces profile information."""
         if self._user_info_cache is None:
             payload = self._request("/user.info", {"handles": self.handle})
             results = payload.get("result", [])
@@ -177,6 +188,7 @@ class Get_data:
         return json.loads(self._user_info_cache)
 
     def user_data_set(self) -> list[dict[str, Any]]:
+        """Fetch and return the user's submission history."""
         if self._user_status_cache is None:
             payload = self._request("/user.status", {"handle": self.handle})
             self._user_status_cache = json.dumps(payload.get("result", []))
@@ -184,6 +196,7 @@ class Get_data:
         return json.loads(self._user_status_cache)
 
     def user_rating_history(self) -> list[dict[str, Any]]:
+        """Fetch and return the user's rating-change history."""
         if self._user_rating_cache is None:
             payload = self._request("/user.rating", {"handle": self.handle})
             self._user_rating_cache = json.dumps(payload.get("result", []))
@@ -191,6 +204,7 @@ class Get_data:
         return json.loads(self._user_rating_cache)
 
     def user_submissions(self) -> list[str]:
+        """Return unique problem IDs the user has solved."""
         solved_ids: list[str] = []
         for submission in self.user_data_set():
             if submission.get("verdict") != "OK":
@@ -251,6 +265,7 @@ class Get_data:
 
 
     def solved_problem_records(self) -> list[dict[str, Any]]:
+        """Return detailed records for each uniquely solved problem."""
         submissions = self.user_data_set()
         attempt_counts: dict[str, int] = {}
 
@@ -305,6 +320,7 @@ class Get_data:
 
     @staticmethod
     def problem_url(contest_id: int | None, index: str | None) -> str | None:
+        """Build a Codeforces problem URL from its contest ID and index."""
         if contest_id is None or index is None:
             return None
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
@@ -318,6 +334,7 @@ class Get_data:
         max_rating: int | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
+        """Search Codeforces problems using text, tags, ratings, and a result limit."""
         params: dict[str, str] = {}
         if tag and tag != "all":
             params["tags"] = tag
@@ -377,12 +394,14 @@ class Get_data:
         return matched_problems
 
     def question_tags(self) -> tuple[list[str], list[list[str]]]:
+        """Return solved problem IDs together with their tag lists."""
         problems = self.solved_problem_records()
         unique_questions = [problem["id"] for problem in problems]
         unique_tags = [problem["tags"] for problem in problems]
         return unique_questions, unique_tags
 
     def unsolved_questions(self) -> list[str]:
+        """Return unique problem IDs the user attempted but did not solve."""
         attempted: list[str] = []
         for submission in self.user_data_set():
             problem = submission.get("problem", {})
@@ -441,6 +460,7 @@ class Get_data:
         return list(unsolved_lookup.values())
 
     def unsolved_problem_records(self) -> list[dict[str, Any]]:
+        """Return detailed records for each uniquely attempted unsolved problem."""
         submissions = self.user_data_set()
         solved_ids = set(self.user_submissions())
         unsolved_lookup: dict[str, dict[str, Any]] = {}
