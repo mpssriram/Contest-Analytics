@@ -256,9 +256,9 @@ class Get_data:
                 "rating": problem.get("rating"),
                 "tags": problem.get("tags", []),
                 "contestId": contest_id,
-                'attempts': attempt_counts.get(problem_id, 1),
-                'solved' : 1,
-                'firstTriedAt': submission.get("creationTimeSeconds")
+                "attempts": attempt_counts.get(problem_id, 1),
+                "solved": 1,
+                "solvedAt": submission.get("creationTimeSeconds"),
             }
 
         return list(solved_lookup.values())
