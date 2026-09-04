@@ -192,7 +192,7 @@ class Get_data:
         if self._user_status_cache is None:
             payload = self._request("/user.status", {"handle": self.handle})
             self._user_status_cache = json.dumps(payload.get("result", []))
-
+    
         return json.loads(self._user_status_cache)
 
     def user_rating_history(self) -> list[dict[str, Any]]:
@@ -221,6 +221,48 @@ class Get_data:
                 solved_ids.append(problem_id)
 
         return solved_ids
+
+    def solved_problem_records_ML(self) -> list[dict[str,Any]]:
+        submissions = self.user_data_set()
+        attempt_counts: dict[str, int] = {}
+
+        for submission in submissions:
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
+
+            problem_id = f"{contest_id}{index}"
+            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
+
+        solved_lookup: dict[str, dict[str, Any]] = {}
+        for submission in reversed(submissions):
+            if submission.get("verdict") != "OK":
+                continue
+
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
+
+            problem_id = f"{contest_id}{index}"
+            if problem_id in solved_lookup:
+                continue
+
+            solved_lookup[problem_id] = {
+                "id": problem_id,
+                "rating": problem.get("rating"),
+                "tags": problem.get("tags", []),
+                "contestId": contest_id,
+                "attempts": attempt_counts.get(problem_id, 1),
+                "solved": 1,
+                "solvedAt": submission.get("creationTimeSeconds"),
+            }
+
+        return list(solved_lookup.values())
+
 
     def solved_problem_records(self) -> list[dict[str, Any]]:
         """Return detailed records for each uniquely solved problem."""
@@ -374,11 +416,66 @@ class Get_data:
 
         return attempted
 
+    def unsolved_problem_records_ML(self) -> list[dict[str, Any]]:
+        submissions = self.user_data_set()
+        solved_ids = set(self.user_submissions())
+        unsolved_lookup: dict[str, dict[str, Any]] = {}
+        attempt_counts = {}
+
+
+        for submission in submissions:
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+
+            if contest_id is None or index is None:
+                continue
+
+            problem_id = f"{contest_id}{index}"
+            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
+
+
+
+        for submission in submissions:
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+            if contest_id is None or index is None:
+                continue
+
+            problem_id = f"{contest_id}{index}"
+            if problem_id in solved_ids or problem_id in unsolved_lookup:
+                continue
+
+            unsolved_lookup[problem_id] = {
+                "id": problem_id,
+                "rating": problem.get("rating"),
+                "tags": problem.get("tags", []),
+                "contestId": contest_id,
+                'attempts': attempt_counts.get(problem_id, 1),
+                'solved' : 0,
+                'firstTriedAt': submission.get("creationTimeSeconds")
+            }
+
+        return list(unsolved_lookup.values())
+
     def unsolved_problem_records(self) -> list[dict[str, Any]]:
         """Return detailed records for each uniquely attempted unsolved problem."""
         submissions = self.user_data_set()
         solved_ids = set(self.user_submissions())
         unsolved_lookup: dict[str, dict[str, Any]] = {}
+        attempt_counts = {}
+
+        for submission in submissions:
+            problem = submission.get("problem", {})
+            contest_id = problem.get("contestId")
+            index = problem.get("index")
+
+            if contest_id is None or index is None:
+                continue
+
+            problem_id = f"{contest_id}{index}"
+            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
 
         for submission in submissions:
             problem = submission.get("problem", {})
@@ -407,6 +504,7 @@ class Get_data:
                 ),
                 "verdict": submission.get("verdict"),
                 "language": submission.get("programmingLanguage"),
+                "attempts": attempt_counts.get(problem_id, 1),
             }
 
         return sorted(
@@ -418,6 +516,8 @@ class Get_data:
 if __name__ == "__main__":
     handle = input("Enter handle: ").strip()
     fetcher = Get_data(handles=handle)
-    print(fetcher.user_info())
-    print(fetcher.user_submissions())
-    print(fetcher.question_tags())
+    print(fetcher.user_rating_history())
+    # print(fetcher.solved_problem_records_ML())
+    # print("/n/n/n")
+    # print(fetcher.unsolved_problem_records_ML())
+
