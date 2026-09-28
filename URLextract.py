@@ -194,7 +194,7 @@ class Get_data:
             self._user_status_cache = json.dumps(payload.get("result", []))
     
         return json.loads(self._user_status_cache)
-
+#  ---- need to check it again ---- 
     def user_rating_history(self) -> list[dict[str, Any]]:
         """Fetch and return the user's rating-change history."""
         if self._user_rating_cache is None:
@@ -225,6 +225,7 @@ class Get_data:
     def solved_problem_records_ML(self) -> list[dict[str,Any]]:
         submissions = self.user_data_set()
         attempt_counts: dict[str, int] = {}
+        first_tried_at = {}
 
         for submission in submissions:
             problem = submission.get("problem", {})
@@ -234,6 +235,11 @@ class Get_data:
                 continue
 
             problem_id = f"{contest_id}{index}"
+            created_at = submission.get("creationTimeSeconds")
+
+            if problem_id not in first_tried_at or created_at < first_tried_at[problem_id]:
+                first_tried_at[problem_id] = created_at
+
             attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
 
         solved_lookup: dict[str, dict[str, Any]] = {}
@@ -259,6 +265,7 @@ class Get_data:
                 "attempts": attempt_counts.get(problem_id, 1),
                 "solved": 1,
                 "solvedAt": submission.get("creationTimeSeconds"),
+                "firstTriedAt": first_tried_at[problem_id],
             }
 
         return list(solved_lookup.values())
@@ -325,9 +332,8 @@ class Get_data:
             return None
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
 
-    @classmethod
-    def search_problemset(
-        cls,
+
+    def search_problemset(self,
         query: str = "",
         tag: str | None = None,
         min_rating: int | None = None,
@@ -339,7 +345,7 @@ class Get_data:
         if tag and tag != "all":
             params["tags"] = tag
 
-        payload = cls._request("/problemset.problems", params)
+        payload = self._request("/problemset.problems", params)
         problems = payload.get("result", {}).get("problems", [])
         statistics = payload.get("result", {}).get("problemStatistics", [])
         solved_lookup = {
@@ -384,7 +390,7 @@ class Get_data:
                 "tags": tags,
                 "contestId": contest_id,
                 "index": index,
-                "url": cls.problem_url(contest_id, index),
+                "url": self.problem_url(contest_id, index),
                 "solvedCount": solved_lookup.get(problem_id, 0),
             })
 
@@ -400,8 +406,10 @@ class Get_data:
         unique_tags = [problem["tags"] for problem in problems]
         return unique_questions, unique_tags
 
-    def unsolved_questions(self) -> list[str]:
+    def unsolved_questions(self) -> list[str]:# bugged 
+
         """Return unique problem IDs the user attempted but did not solve."""
+        
         attempted: list[str] = []
         for submission in self.user_data_set():
             problem = submission.get("problem", {})
