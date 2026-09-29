@@ -2,13 +2,14 @@ import model_pipeline as ML_pp
 
 class Evaluation:
 
-    def __init__(self, handle, threshold):
-        self.pipeline = ML_pp.ModelPipeline(handle=handle)
-
-        self.model, self.y_prob, self.y_validation = self.pipeline.model_trainning()
-
-        self.X_train, self.Y_train, self.X_validation, self.Y_validation, self.X_test, self.y = (self.pipeline.train_test_split())
-
+    def __init__(self, handle=None, threshold=0.5, y_prob=None, y_true=None):
+        if handle is not None:
+            self.pipeline = ML_pp.ModelPipeline(handle=handle)
+            self.model, self.y_prob, self.y_validation = self.pipeline.model_trainning()
+            self.X_train, self.Y_train, self.X_validation, self.Y_validation, self.X_test, self.y = (self.pipeline.train_test_split())
+        else:
+            self.y_prob = y_prob
+            self.y_validation = y_true
         self.threshold = threshold
 
     def model_calculations(self):
