@@ -1,10 +1,12 @@
 from model_pipeline import ModelPipeline as MP
 from evaluation import Evaluation
 import pathlib as path
+import joblib
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 FEATURES = ['rating','previous_solved_count','previous_avg_solved_rating','previous_avg_tag_success_rate','previous_avg_tag_attempted','user_rating_at_time','rating_gap']
+SAVE_MODEL = True
 
 
 class Training:
@@ -52,6 +54,12 @@ class Training:
 if __name__ == "__main__":
     training = Training()
     training.training()
+
+    if SAVE_MODEL:
+        saved_dir = path.Path(__file__).parent / 'saved'
+        saved_dir.mkdir(parents=True, exist_ok=True)
+        joblib.dump(training.pipeline.model, saved_dir / 'model.joblib')
+        joblib.dump(training.pipeline.scaler, saved_dir / 'scaler.joblib')
 
     # thresholds = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90]
     # print("threshold, TP, TN, FP, FN, metrics")

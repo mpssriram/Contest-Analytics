@@ -2,6 +2,7 @@ import type {
   CompareData,
   DashboardData,
   GlobalProblem,
+  RecommendedProblem,
   TrackedHandle,
 } from "../types/analytics";
 
@@ -95,4 +96,15 @@ export async function fetchGlobalProblems(filters: ProblemSearchFilters): Promis
   searchParams.set("limit", String(filters.limit || 40));
 
   return requestJson<GlobalProblem[]>(`/api/problems/search?${searchParams.toString()}`);
+}
+
+export async function fetchRecommendedProblems(handle: string): Promise<RecommendedProblem[]> {
+  const normalizedHandle = handle.trim();
+  if (!normalizedHandle) {
+    throw new Error("Enter a Codeforces handle to load recommendations.");
+  }
+
+  return requestJson<RecommendedProblem[]>(
+    `/api/recommend/${encodeURIComponent(normalizedHandle)}`
+  );
 }

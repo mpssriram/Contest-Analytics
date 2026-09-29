@@ -46,6 +46,15 @@ export interface GlobalProblem {
   solvedCount: number;
 }
 
+export interface RecommendedProblem {
+  id: string;
+  name: string;
+  rating: number;
+  tags: string[];
+  probability: number;
+  url: string;
+}
+
 export interface TagStat {
   tag: string;
   count: number;

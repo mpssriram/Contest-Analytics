@@ -4,3 +4,5 @@ requests>=2.32,<3.0
 pandas>=2.2,<3.0
 sqlalchemy>=2.0,<3.0
 pymysql>=1.1,<2.0
+scikit-learn>=1.5,<2.0
+joblib>=1.4,<2.0

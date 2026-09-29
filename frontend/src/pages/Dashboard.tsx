@@ -6,6 +6,7 @@ import { InsightsPanel } from "../components/InsightsPanel";
 import { LoadingDashboard } from "../components/LoadingDashboard";
 import { ProblemsTable } from "../components/ProblemsTable";
 import { ProfileCard } from "../components/ProfileCard";
+import { RecommendedProblems } from "../components/RecommendedProblems";
 import { SearchBar } from "../components/SearchBar";
 import { StatCard } from "../components/StatCard";
 import { ActivityAreaChart } from "../components/charts/ActivityAreaChart";
@@ -136,6 +137,8 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      <RecommendedProblems handle={handle} />
 
       <ProblemsTable
         problems={data.solvedProblems}

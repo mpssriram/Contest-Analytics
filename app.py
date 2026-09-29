@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from Data_dataframe import Dataframe_former
 from URLextract import CodeforcesAPIError, Get_data
 from database import create_tables, get_db
+from ml.recommend import recommend
 from models import TrackedHandle
 from schemas import TrackedHandleResponse
 
@@ -187,6 +188,14 @@ def get_solved_problems(handle: str) -> list[dict[str, object | None]]:
 def get_unsolved_problems(handle: str) -> list[dict[str, object | None]]:
     try:
         return Get_data(handle).unsolved_problem_records()
+    except Exception as error:
+        raise_http_error(error)
+
+
+@api_router.get("/recommend/{handle}")
+def get_recommended_problems(handle: str) -> list[dict[str, object | None]]:
+    try:
+        return recommend(handle)
     except Exception as error:
         raise_http_error(error)
 
