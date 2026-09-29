@@ -1,41 +1,40 @@
-## Vercel Web Analytics Installation
+## Vercel Speed Insights Installation and Configuration
 
-Successfully installed and configured Vercel Web Analytics for the Contest Analytics frontend application.
+Successfully installed and configured Vercel Speed Insights for the React + Vite project.
 
-### Changes Made
+### Changes Made:
 
-**Modified Files:**
-1. `package.json` - Added `@vercel/analytics` ^2.0.1 as a dependency
-2. `package-lock.json` - Updated with the new package and its dependencies
-3. `src/App.tsx` - Added Analytics component integration
+#### 1. Installed Dependencies
+- Added `@vercel/speed-insights` v2.0.0 to package.json dependencies
+- Updated package-lock.json with the new package and its dependencies
 
-### Implementation Details
+#### 2. Modified Files
+- **frontend/src/App.tsx**
+  - Added import: `import { SpeedInsights } from "@vercel/speed-insights/react";`
+  - Added `<SpeedInsights />` component to the main App component, placed right after `<Analytics />`
 
-Following the official Vercel Analytics documentation (retrieved from https://vercel.com/docs/analytics/quickstart), I:
+### Implementation Details:
 
-1. **Installed the package:** Used npm to install `@vercel/analytics` version 2.0.1
-2. **Added the import:** Imported the Analytics component from `@vercel/analytics/react`
-3. **Integrated the component:** Added `<Analytics />` to the root App component, placed at the end of the main container div
+According to the official Vercel documentation (https://vercel.com/docs/speed-insights/quickstart), for React/Vite applications:
+- The `SpeedInsights` component should be imported from `@vercel/speed-insights/react`
+- The component should be placed at the root level of the application to track all pages
+- No additional configuration or environment variables are required for basic functionality
 
-### Framework-Specific Configuration
+The implementation follows the same pattern already established in the project with the `@vercel/analytics` package, placing both Analytics and SpeedInsights components in the App.tsx file.
 
-This is a React + Vite project using TypeScript. The Analytics component was added using the React-specific import path (`@vercel/analytics/react`) as specified in the documentation for React applications.
+### Verification:
 
-The Analytics component is a wrapper around the tracking script that provides seamless integration with React. It was added to the App component, which is the root component of the application, ensuring analytics tracking is enabled across all routes.
+✅ Build completed successfully with no errors
+✅ TypeScript compilation passed
+✅ All dependencies installed correctly
+✅ SpeedInsights component properly integrated alongside existing Analytics
 
-### Verification
+### Next Steps:
 
-- ✅ Build completed successfully with no errors
-- ✅ TypeScript compilation passed
-- ✅ All dependencies properly installed (177 packages added)
-- ✅ No breaking changes to existing functionality
+To see Speed Insights data:
+1. Enable Speed Insights in your Vercel project dashboard
+2. Deploy the application using `vercel deploy`
+3. Visit your site to generate performance metrics
+4. View the insights in your Vercel dashboard
 
-### Next Steps
-
-To enable analytics data collection:
-1. Deploy this project to Vercel using `vercel deploy`
-2. Navigate to the Analytics tab in the Vercel dashboard
-3. Click "Enable" to activate Web Analytics
-4. After deployment and user visits, data will be visible in the dashboard
-
-The Analytics component will automatically begin tracking page views once the application is deployed to Vercel and analytics is enabled in the dashboard.
+No additional configuration is needed - Speed Insights will automatically start tracking performance metrics once deployed to Vercel.
