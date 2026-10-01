@@ -1,0 +1,10 @@
+# Copy this file to config.yaml and fill in your local MySQL details.
+# config.yaml is gitignored, so your password never gets committed.
+# If DATABASE_URL is set as an environment variable, it is used instead.
+database:
+  type: mysql
+  host: localhost
+  port: 3306
+  user: root
+  password: "your_password"
+  database: codeforces

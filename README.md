@@ -42,7 +42,7 @@ It's a simple model trained on a small, low-rated sample, so treat it as a pract
 ```text
 Contest-Analytics/
 ├── app.py                     # entry point for uvicorn (loads backend/main.py)
-├── config.yaml                # local database settings
+├── config.example.yaml        # template for your local config.yaml (gitignored)
 ├── backend/
 │   ├── main.py                # FastAPI app, CORS, error handling
 │   ├── api/                   # one router per feature
@@ -80,7 +80,7 @@ To use MySQL, either set `DATABASE_URL`:
 DATABASE_URL=mysql+pymysql://user:password@localhost:3306/codeforces
 ```
 
-or fill in `config.yaml` and create the database it points to (`CREATE DATABASE codeforces;`). `DATABASE_URL` wins if both are set. The table is created automatically on startup.
+or copy `config.example.yaml` to `config.yaml`, fill in your details, and create the database it points to (`CREATE DATABASE codeforces;`). `config.yaml` is gitignored so your password stays local. `DATABASE_URL` wins if both are set. The table is created automatically on startup.
 
 Then start the API:
 

@@ -15,6 +15,7 @@ env/
 .env
 .env.*
 !.env.example
+config.yaml
 
 # Node / frontend
 node_modules/

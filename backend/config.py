@@ -18,8 +18,10 @@ class Config:
     # Internal helpers
     # ---------------------
     def _load_yaml(self):
+        # config.yaml is not in git, so a fresh clone or a deploy won't have it.
+        # then everything falls back to defaults / the DATABASE_URL env variable
         if not self.config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+            return {}
 
         with self.config_path.open("r") as f:
             return yaml.safe_load(f) or {}
