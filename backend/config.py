@@ -1,5 +1,3 @@
-# config.py
-# config.py
 import yaml
 from pathlib import Path
 
@@ -10,13 +8,11 @@ class Config:
         self._data = self._load_yaml()
 
         # ---- Database ----
-        self.DB_TYPE = self._get("database.type")
-        self.HOST = self._get("database.host")
-        self.USER = self._get("database.user")
-        self.PASSWORD = self._get("database.password")
-        self.DATABASE = self._get("database.database")
-        
-
+        self.DB_TYPE = self.get("database.type")
+        self.HOST = self.get("database.host")
+        self.USER = self.get("database.user")
+        self.PASSWORD = self.get("database.password")
+        self.DATABASE = self.get("database.database")
 
     # ---------------------
     # Internal helpers
@@ -26,10 +22,10 @@ class Config:
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
 
         with self.config_path.open("r") as f:
-            
             return yaml.safe_load(f) or {}
-    def _get(self, dotted_key, default=None):
-        
+
+    def get(self, dotted_key, default=None):
+        """Read a nested value like "database.host", or return default if it is missing."""
         keys = dotted_key.split(".")
         value = self._data
 
@@ -39,7 +35,6 @@ class Config:
             value = value[k]
 
         return value
+
     def as_dict(self):
         return self._data
-if __name__ == "__main__":
-    config = Config()

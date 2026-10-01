@@ -1,63 +1,66 @@
-import { useNavigate } from "react-router-dom";
-import { FeatureCards } from "../components/FeatureCards";
+import { Link, useNavigate } from "react-router-dom";
 import { HeroSection } from "../components/HeroSection";
-import { StickyScroll } from "../components/ui/sticky-scroll-reveal";
+import { BarChartIcon, SearchIcon, SparklesIcon, UserIcon } from "../components/icons";
+
+const FEATURES = [
+  {
+    icon: BarChartIcon,
+    title: "Where your solves are",
+    description: "Tag and rating breakdowns, monthly activity, and the topics that barely show up in your accepted problems.",
+    to: "/dashboard/tourist#charts",
+    linkLabel: "See an example"
+  },
+  {
+    icon: SparklesIcon,
+    title: "What to practice next",
+    description: "Problems you gave up on, plus suggestions from a small model trained to find ones that are hard but doable for you.",
+    to: "/dashboard/tourist",
+    linkLabel: "See an example"
+  },
+  {
+    icon: UserIcon,
+    title: "Compare with a friend",
+    description: "Two handles side by side: shared problems, the ones only one of you solved, and common strong topics.",
+    to: "/compare",
+    linkLabel: "Compare handles"
+  },
+  {
+    icon: SearchIcon,
+    title: "Search all problems",
+    description: "Look up any Codeforces problem by name, ID like 1873B, tag, or rating range.",
+    to: "/problems",
+    linkLabel: "Search problems"
+  }
+];
 
 export function Home() {
   const navigate = useNavigate();
-
-  const reportFlow = [
-    {
-      title: "Collect the raw Codeforces trail",
-      description:
-        "The backend reads solved submissions, attempted unsolved problems, profile details, contests, tags, languages, and activity dates.",
-      content: (
-        <div className="flex h-full flex-col justify-end rounded-md bg-gradient-to-br from-cyan-500 to-emerald-500 p-6 text-white">
-          <p className="text-sm uppercase tracking-[0.24em] opacity-80">Step 01</p>
-          <p className="mt-3 font-display text-2xl font-semibold">Raw API data</p>
-        </div>
-      )
-    },
-    {
-      title: "Turn activity into a neutral report",
-      description:
-        "Instead of generic recommendations, the UI shows what the user has actually done: strongest tags, low-coverage tags, rating spread, and recent attempts.",
-      content: (
-        <div className="flex h-full flex-col justify-end rounded-md bg-gradient-to-br from-sky-500 to-indigo-500 p-6 text-white">
-          <p className="text-sm uppercase tracking-[0.24em] opacity-80">Step 02</p>
-          <p className="mt-3 font-display text-2xl font-semibold">Observed patterns</p>
-        </div>
-      )
-    },
-    {
-      title: "Compare users without making it generic",
-      description:
-        "The compare view highlights common solved problems, one-sided wins, overlap rate, rating gap, contest gap, and searchable problem lenses.",
-      content: (
-        <div className="flex h-full flex-col justify-end rounded-md bg-gradient-to-br from-orange-500 to-amber-400 p-6 text-slate-950">
-          <p className="text-sm uppercase tracking-[0.24em] opacity-70">Step 03</p>
-          <p className="mt-3 font-display text-2xl font-semibold">Problem lens</p>
-        </div>
-      )
-    }
-  ];
 
   const handleAnalyze = (handle: string) => {
     navigate(`/dashboard/${encodeURIComponent(handle)}?track=1`);
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 page-reveal">
       <HeroSection onAnalyze={handleAnalyze} />
-      <FeatureCards />
-      <section className="report-shell overflow-hidden p-4">
-        <div className="px-2 pt-2">
-          <p className="eyebrow">Report workflow</p>
-          <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight">How the website turns practice into a readable report</h2>
-        </div>
-        <div className="mt-4">
-          <StickyScroll content={reportFlow} contentClassName="shadow-panel" />
-        </div>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {FEATURES.map((feature) => (
+          <Link
+            key={feature.title}
+            to={feature.to}
+            className="report-shell hover-lift group flex flex-col p-5"
+          >
+            <div className="w-fit rounded-xl bg-primary-soft p-2.5 text-primary">
+              <feature.icon className="h-5 w-5" />
+            </div>
+            <h2 className="mt-4 font-display text-lg font-semibold tracking-tight">{feature.title}</h2>
+            <p className="mt-2 flex-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{feature.description}</p>
+            <span className="mt-4 text-sm font-medium text-primary transition group-hover:opacity-80">
+              {feature.linkLabel} →
+            </span>
+          </Link>
+        ))}
       </section>
     </div>
   );

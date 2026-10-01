@@ -1,6 +1,5 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import json
 import threading
 import time
 from datetime import datetime, timezone
@@ -36,18 +35,28 @@ class CodeforcesAPIError(Exception):
         self.status_code = status_code
 
 
-class Get_data:
+class InvalidHandleError(ValueError):
+    """Raised when a request is made without a usable Codeforces handle."""
+
+
+class CodeforcesClient:
     BASE_URL = "https://codeforces.com/api"
     HEADERS = {"User-Agent": "Contest Analytics/1.0"}
 
-    def __init__(self, handles: str):
+    def __init__(self, handle: str):
         """Create a Codeforces data client for a handle."""
-        self.handle = handles.strip()
+        self.handle = handle.strip()
         if not self.handle:
-            raise ValueError("Codeforces handle is required.")
-        self._user_info_cache: str | None = None
-        self._user_status_cache: str | None = None
-        self._user_rating_cache: str | None = None
+            raise InvalidHandleError("Codeforces handle is required.")
+
+        # filled the first time they are needed, then reused for this request.
+        # callers only read these, so they are returned without copying
+        self._user_info_cache: dict[str, Any] | None = None
+        self._user_status_cache: list[dict[str, Any]] | None = None
+        self._user_rating_cache: list[dict[str, Any]] | None = None
+        self._problem_history_cache: dict[str, dict[str, Any]] | None = None
+        self._solved_records_cache: list[dict[str, Any]] | None = None
+        self._unsolved_records_cache: list[dict[str, Any]] | None = None
 
     
     @classmethod
@@ -138,6 +147,19 @@ class Get_data:
                     retry_after_header = exc.response.headers.get("Retry-After") if exc.response is not None else None
                     time.sleep(cls._retry_delay_seconds(attempt, status_code=status_code, retry_after_header=retry_after_header))
                     continue
+
+                # a bad request (like an unknown handle) comes back as 400 with
+                # the reason in the JSON "comment"
+                if status_code == 400:
+                    try:
+                        comment = exc.response.json().get("comment") or "Codeforces rejected the request."
+                    except ValueError:
+                        comment = "Codeforces rejected the request."
+                    raise CodeforcesAPIError(
+                        comment,
+                        status_code=404 if "not found" in comment.lower() else 400,
+                    ) from exc
+
                 raise CodeforcesAPIError(
                     "Codeforces API rate limit reached. Please wait a few seconds and try again."
                     if status_code == 429
@@ -153,7 +175,15 @@ class Get_data:
                     status_code=502
                 ) from exc
 
-            payload = response.json()
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                # Codeforces serves HTML pages during maintenance or bot checks.
+                raise CodeforcesAPIError(
+                    "Codeforces API returned an unreadable response. Please try again.",
+                    status_code=502,
+                ) from exc
+
             if payload.get("status") == "OK":
                 cls._store_cached_payload(path, params, payload)
                 return payload
@@ -183,51 +213,35 @@ class Get_data:
             results = payload.get("result", [])
             if not results:
                 raise CodeforcesAPIError(f"Handle '{self.handle}' was not found.", status_code=404)
-            self._user_info_cache = json.dumps(results[0])
+            self._user_info_cache = results[0]
 
-        return json.loads(self._user_info_cache)
+        return self._user_info_cache
 
     def user_data_set(self) -> list[dict[str, Any]]:
-        """Fetch and return the user's submission history."""
+        """Fetch and return the user's submission history (newest first)."""
         if self._user_status_cache is None:
             payload = self._request("/user.status", {"handle": self.handle})
-            self._user_status_cache = json.dumps(payload.get("result", []))
-    
-        return json.loads(self._user_status_cache)
-#  ---- need to check it again ---- 
+            self._user_status_cache = payload.get("result", [])
+
+        return self._user_status_cache
+
     def user_rating_history(self) -> list[dict[str, Any]]:
         """Fetch and return the user's rating-change history."""
         if self._user_rating_cache is None:
             payload = self._request("/user.rating", {"handle": self.handle})
-            self._user_rating_cache = json.dumps(payload.get("result", []))
+            self._user_rating_cache = payload.get("result", [])
 
-        return json.loads(self._user_rating_cache)
+        return self._user_rating_cache
 
-    def user_submissions(self) -> list[str]:
-        """Return unique problem IDs the user has solved."""
-        solved_ids: list[str] = []
-        for submission in self.user_data_set():
-            if submission.get("verdict") != "OK":
-                continue
+    def problem_history(self) -> dict[str, dict[str, Any]]:
+        """Group the user's submissions by problem ID, going through them only once."""
+        if self._problem_history_cache is not None:
+            return self._problem_history_cache
 
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
-                continue
+        history: dict[str, dict[str, Any]] = {}
 
-            problem_id = f"{contest_id}{index}"
-            if problem_id not in solved_ids:
-                solved_ids.append(problem_id)
-
-        return solved_ids
-
-    def solved_problem_records_ML(self) -> list[dict[str,Any]]:
-        submissions = self.user_data_set()
-        attempt_counts: dict[str, int] = {}
-        first_tried_at = {}
-
-        for submission in submissions:
+        # submissions come newest first, so position 0 is the latest one
+        for position, submission in enumerate(self.user_data_set()):
             problem = submission.get("problem", {})
             contest_id = problem.get("contestId")
             index = problem.get("index")
@@ -237,93 +251,112 @@ class Get_data:
             problem_id = f"{contest_id}{index}"
             created_at = submission.get("creationTimeSeconds")
 
-            if problem_id not in first_tried_at or created_at < first_tried_at[problem_id]:
-                first_tried_at[problem_id] = created_at
+            # the first time we see a problem is its latest attempt
+            if problem_id not in history:
+                history[problem_id] = {
+                    "latest": submission,
+                    "attempts": 0,
+                    "firstTriedAt": created_at,
+                    "firstAccepted": None,
+                    "firstAcceptedPosition": -1,
+                    "lastAcceptedPosition": -1,
+                }
 
-            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
+            entry = history[problem_id]
+            entry["attempts"] += 1
 
-        solved_lookup: dict[str, dict[str, Any]] = {}
-        for submission in reversed(submissions):
-            if submission.get("verdict") != "OK":
-                continue
+            # keep the smallest time = the first attempt
+            if created_at is not None and (entry["firstTriedAt"] is None or created_at < entry["firstTriedAt"]):
+                entry["firstTriedAt"] = created_at
 
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
-                continue
+            if submission.get("verdict") == "OK":
+                if entry["lastAcceptedPosition"] == -1:
+                    entry["lastAcceptedPosition"] = position
+                # keeps getting replaced until we reach the oldest accept
+                entry["firstAccepted"] = submission
+                entry["firstAcceptedPosition"] = position
 
-            problem_id = f"{contest_id}{index}"
-            if problem_id in solved_lookup:
-                continue
+        self._problem_history_cache = history
+        return history
 
-            solved_lookup[problem_id] = {
+    def _solved_history(self) -> list[tuple[str, dict[str, Any]]]:
+        """Return solved problems ordered by their first accept, oldest first."""
+        solved = []
+        for problem_id, entry in self.problem_history().items():
+            if entry["firstAccepted"] is not None:
+                solved.append((problem_id, entry))
+
+        # a bigger position means an older submission
+        solved.sort(key=lambda item: item[1]["firstAcceptedPosition"], reverse=True)
+        return solved
+
+    def _unsolved_history(self) -> list[tuple[str, dict[str, Any]]]:
+        """Return attempted but unsolved problems ordered by latest attempt, newest first."""
+        unsolved = []
+        for problem_id, entry in self.problem_history().items():
+            if entry["firstAccepted"] is None:
+                unsolved.append((problem_id, entry))
+
+        return unsolved
+
+    @staticmethod
+    def _to_iso_time(created_at: int | None) -> str | None:
+        """Turn a Unix timestamp into an ISO date string."""
+        if not created_at:
+            return None
+        return datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
+
+    def solved_problem_ids(self) -> list[str]:
+        """Return unique problem IDs the user has solved, most recent accept first."""
+        solved = self._solved_history()
+        solved.sort(key=lambda item: item[1]["lastAcceptedPosition"])
+        return [problem_id for problem_id, _ in solved]
+
+    def solved_problem_records_ML(self) -> list[dict[str, Any]]:
+        """Return solved problems in the shape the ML pipeline trains on."""
+        records = []
+        for problem_id, entry in self._solved_history():
+            accepted = entry["firstAccepted"]
+            problem = accepted.get("problem", {})
+            records.append({
                 "id": problem_id,
                 "rating": problem.get("rating"),
                 "tags": problem.get("tags", []),
-                "contestId": contest_id,
-                "attempts": attempt_counts.get(problem_id, 1),
+                "contestId": problem.get("contestId"),
+                "attempts": entry["attempts"],
                 "solved": 1,
-                "solvedAt": submission.get("creationTimeSeconds"),
-                "firstTriedAt": first_tried_at[problem_id],
-            }
+                "solvedAt": accepted.get("creationTimeSeconds"),
+                "firstTriedAt": entry["firstTriedAt"],
+            })
 
-        return list(solved_lookup.values())
-
+        return records
 
     def solved_problem_records(self) -> list[dict[str, Any]]:
         """Return detailed records for each uniquely solved problem."""
-        submissions = self.user_data_set()
-        attempt_counts: dict[str, int] = {}
+        if self._solved_records_cache is None:
+            records = []
+            for problem_id, entry in self._solved_history():
+                accepted = entry["firstAccepted"]
+                problem = accepted.get("problem", {})
+                contest_id = problem.get("contestId")
+                index = problem.get("index")
+                records.append({
+                    "id": problem_id,
+                    "name": problem.get("name", problem_id),
+                    "rating": problem.get("rating"),
+                    "tags": problem.get("tags", []),
+                    "contestId": contest_id,
+                    "index": index,
+                    "url": self.problem_url(contest_id, index),
+                    "solvedAt": self._to_iso_time(accepted.get("creationTimeSeconds")),
+                    "attempts": entry["attempts"],
+                    "language": accepted.get("programmingLanguage"),
+                })
 
-        for submission in submissions:
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
-                continue
+            records.sort(key=lambda item: item.get("solvedAt") or "", reverse=True)
+            self._solved_records_cache = records
 
-            problem_id = f"{contest_id}{index}"
-            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
-
-        solved_lookup: dict[str, dict[str, Any]] = {}
-        for submission in reversed(submissions):
-            if submission.get("verdict") != "OK":
-                continue
-
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
-                continue
-
-            problem_id = f"{contest_id}{index}"
-            if problem_id in solved_lookup:
-                continue
-
-            created_at = submission.get("creationTimeSeconds")
-            solved_lookup[problem_id] = {
-                "id": problem_id,
-                "name": problem.get("name", problem_id),
-                "rating": problem.get("rating"),
-                "tags": problem.get("tags", []),
-                "contestId": contest_id,
-                "index": index,
-                "url": self.problem_url(contest_id, index),
-                "solvedAt": (
-                    datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
-                    if created_at
-                    else None
-                ),
-                "attempts": attempt_counts.get(problem_id, 1),
-                "language": submission.get("programmingLanguage")
-            }
-
-        return sorted(
-            solved_lookup.values(),
-            key=lambda item: item.get("solvedAt") or "",
-            reverse=True
-        )
+        return list(self._solved_records_cache)
 
     @staticmethod
     def problem_url(contest_id: int | None, index: str | None) -> str | None:
@@ -332,8 +365,9 @@ class Get_data:
             return None
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
 
-
-    def search_problemset(self,
+    @classmethod
+    def search_problemset(
+        cls,
         query: str = "",
         tag: str | None = None,
         min_rating: int | None = None,
@@ -345,7 +379,7 @@ class Get_data:
         if tag and tag != "all":
             params["tags"] = tag
 
-        payload = self._request("/problemset.problems", params)
+        payload = cls._request("/problemset.problems", params)
         problems = payload.get("result", {}).get("problems", [])
         statistics = payload.get("result", {}).get("problemStatistics", [])
         solved_lookup = {
@@ -390,7 +424,7 @@ class Get_data:
                 "tags": tags,
                 "contestId": contest_id,
                 "index": index,
-                "url": self.problem_url(contest_id, index),
+                "url": cls.problem_url(contest_id, index),
                 "solvedCount": solved_lookup.get(problem_id, 0),
             })
 
@@ -399,133 +433,50 @@ class Get_data:
 
         return matched_problems
 
-    def question_tags(self) -> tuple[list[str], list[list[str]]]:
-        """Return solved problem IDs together with their tag lists."""
-        problems = self.solved_problem_records()
-        unique_questions = [problem["id"] for problem in problems]
-        unique_tags = [problem["tags"] for problem in problems]
-        return unique_questions, unique_tags
-
-    def unsolved_questions(self) -> list[str]:# bugged 
-
-        """Return unique problem IDs the user attempted but did not solve."""
-        
-        attempted: list[str] = []
-        for submission in self.user_data_set():
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
-                continue
-
-            problem_id = f"{contest_id}{index}"
-            if problem_id not in attempted:
-                attempted.append(problem_id)
-
-        return attempted
-
     def unsolved_problem_records_ML(self) -> list[dict[str, Any]]:
-        submissions = self.user_data_set()
-        solved_ids = set(self.user_submissions())
-        unsolved_lookup: dict[str, dict[str, Any]] = {}
-        attempt_counts = {}
-
-
-        for submission in submissions:
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-
-            if contest_id is None or index is None:
-                continue
-
-            problem_id = f"{contest_id}{index}"
-            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
-
-
-
-        for submission in submissions:
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
-                continue
-
-            problem_id = f"{contest_id}{index}"
-            if problem_id in solved_ids or problem_id in unsolved_lookup:
-                continue
-
-            unsolved_lookup[problem_id] = {
+        """Return attempted but unsolved problems in the shape the ML pipeline trains on."""
+        records = []
+        for problem_id, entry in self._unsolved_history():
+            latest = entry["latest"]
+            problem = latest.get("problem", {})
+            records.append({
                 "id": problem_id,
                 "rating": problem.get("rating"),
                 "tags": problem.get("tags", []),
-                "contestId": contest_id,
-                'attempts': attempt_counts.get(problem_id, 1),
-                'solved' : 0,
-                'firstTriedAt': submission.get("creationTimeSeconds")
-            }
+                "contestId": problem.get("contestId"),
+                "attempts": entry["attempts"],
+                "solved": 0,
+                # NOTE: this is the latest attempt, not the first one. the saved
+                # model was trained on this value, so retrain before changing it
+                "firstTriedAt": latest.get("creationTimeSeconds"),
+            })
 
-        return list(unsolved_lookup.values())
+        return records
 
     def unsolved_problem_records(self) -> list[dict[str, Any]]:
         """Return detailed records for each uniquely attempted unsolved problem."""
-        submissions = self.user_data_set()
-        solved_ids = set(self.user_submissions())
-        unsolved_lookup: dict[str, dict[str, Any]] = {}
-        attempt_counts = {}
+        if self._unsolved_records_cache is None:
+            records = []
+            for problem_id, entry in self._unsolved_history():
+                latest = entry["latest"]
+                problem = latest.get("problem", {})
+                contest_id = problem.get("contestId")
+                index = problem.get("index")
+                records.append({
+                    "id": problem_id,
+                    "name": problem.get("name", problem_id),
+                    "rating": problem.get("rating"),
+                    "tags": problem.get("tags", []),
+                    "contestId": contest_id,
+                    "index": index,
+                    "url": self.problem_url(contest_id, index),
+                    "lastTriedAt": self._to_iso_time(latest.get("creationTimeSeconds")),
+                    "verdict": latest.get("verdict"),
+                    "language": latest.get("programmingLanguage"),
+                    "attempts": entry["attempts"],
+                })
 
-        for submission in submissions:
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
+            records.sort(key=lambda item: item.get("lastTriedAt") or "", reverse=True)
+            self._unsolved_records_cache = records
 
-            if contest_id is None or index is None:
-                continue
-
-            problem_id = f"{contest_id}{index}"
-            attempt_counts[problem_id] = attempt_counts.get(problem_id, 0) + 1
-
-        for submission in submissions:
-            problem = submission.get("problem", {})
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
-                continue
-
-            problem_id = f"{contest_id}{index}"
-            if problem_id in solved_ids or problem_id in unsolved_lookup:
-                continue
-
-            created_at = submission.get("creationTimeSeconds")
-            unsolved_lookup[problem_id] = {
-                "id": problem_id,
-                "name": problem.get("name", problem_id),
-                "rating": problem.get("rating"),
-                "tags": problem.get("tags", []),
-                "contestId": contest_id,
-                "index": index,
-                "url": self.problem_url(contest_id, index),
-                "lastTriedAt": (
-                    datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat()
-                    if created_at
-                    else None
-                ),
-                "verdict": submission.get("verdict"),
-                "language": submission.get("programmingLanguage"),
-                "attempts": attempt_counts.get(problem_id, 1),
-            }
-
-        return sorted(
-            unsolved_lookup.values(),
-            key=lambda item: item.get("lastTriedAt") or "",
-            reverse=True
-        )
-
-if __name__ == "__main__":
-    handle = input("Enter handle: ").strip()
-    fetcher = Get_data(handles=handle)
-    print(fetcher.user_rating_history())
-    # print(fetcher.solved_problem_records_ML())
-    # print("/n/n/n")
-    # print(fetcher.unsolved_problem_records_ML())
-
+        return list(self._unsolved_records_cache)

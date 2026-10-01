@@ -1,18 +1,19 @@
 import os
 from pathlib import Path
 
-import config as cfgq
-
-cfg = cfgq.Config(Path(__file__).resolve().parent / "config.yaml")
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-MYSQL_HOST = cfg._get("database.host", "localhost")
-MYSQL_PORT = cfg._get("database.port", 3306)
-MYSQL_USER = cfg._get("database.user", "root")
-MYSQL_PASSWORD = cfg._get("database.password", "")
-MYSQL_DATABASE = cfg._get("database.database", "")
+from backend.config import Config
+
+# config.yaml stays in the project root, one folder above backend/
+cfg = Config(Path(__file__).resolve().parents[1] / "config.yaml")
+
+MYSQL_HOST = cfg.get("database.host", "localhost")
+MYSQL_PORT = cfg.get("database.port", 3306)
+MYSQL_USER = cfg.get("database.user", "root")
+MYSQL_PASSWORD = cfg.get("database.password", "")
+MYSQL_DATABASE = cfg.get("database.database", "")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL and all(
@@ -52,7 +53,7 @@ def create_tables() -> None:
     if engine is None:
         return
 
-    import models
+    from backend import models  # registers the tables on Base
 
     Base.metadata.create_all(bind=engine)
 

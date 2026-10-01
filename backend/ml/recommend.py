@@ -1,13 +1,10 @@
 
 from pathlib import Path
-import sys
 
 import joblib
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from URLextract import Get_data
+from backend.services.codeforces_client import CodeforcesClient
  
 # rating window around the user's rating
 RATING_BELOW = 100
@@ -46,8 +43,7 @@ _PROBLEMSET_CACHE = None
  
  
 def _get_problemset(source):
-    # source is a Get_data object; calling through it works whether
-    # _request / problem_url are normal methods or static methods
+    # source is a CodeforcesClient object
     global _PROBLEMSET_CACHE
     if _PROBLEMSET_CACHE is None:
         payload = source._request("/problemset.problems", {})
@@ -146,7 +142,7 @@ def recommend(handle, top_n=10):
             "Saved model files are missing. Run Multi_data_training_model.py with SAVE_MODEL = True."
         ) from _MODEL_ERROR
  
-    source = Get_data(handles=handle)
+    source = CodeforcesClient(handle=handle)
     history, solved_count, average_solved_rating, tag_solved, tag_attempted, user_rating = _history_features(source)
  
     # every problem the user has already attempted (solved or not) is excluded

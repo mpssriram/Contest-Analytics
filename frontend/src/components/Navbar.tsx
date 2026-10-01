@@ -11,21 +11,22 @@ interface NavbarProps {
 export function Navbar({ theme, onToggleTheme }: NavbarProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
         <Link className="flex items-center gap-3" to="/">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground shadow-panel">
             <BrandIcon className="h-5 w-5" />
           </div>
-          <div>
+          <div className="hidden sm:block">
             <p className="font-display text-base font-semibold tracking-tight">Contest Analytics</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">Codeforces insights dashboard</p>
           </div>
         </Link>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <nav className="hidden items-center gap-2 rounded-full border border-border bg-surface/80 p-1.5 sm:flex">
+          <nav className="flex items-center gap-1 rounded-full border border-border bg-surface/80 p-1 sm:gap-2 sm:p-1.5">
             {[
               { to: "/", label: "Home" },
+              { to: "/problems", label: "Problems" },
               { to: "/compare", label: "Compare" },
               { to: "/dashboard/tourist", label: "Demo" }
             ].map((item) => (
@@ -34,7 +35,7 @@ export function Navbar({ theme, onToggleTheme }: NavbarProps) {
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                    "rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:px-4 sm:py-2",
                     isActive
                       ? "bg-secondary text-secondary-foreground"
                       : "text-slate-600 hover:text-foreground dark:text-slate-300"
@@ -45,10 +46,6 @@ export function Navbar({ theme, onToggleTheme }: NavbarProps) {
               </NavLink>
             ))}
           </nav>
-
-          <span className="hidden rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-600 dark:text-sky-300 md:inline-flex">
-            React + FastAPI
-          </span>
 
           <button
             type="button"

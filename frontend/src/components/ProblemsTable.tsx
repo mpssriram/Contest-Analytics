@@ -1,12 +1,8 @@
-import { FormEvent, Fragment, useDeferredValue, useEffect, useState } from "react";
-import type { GlobalProblem, SolvedProblem, UnsolvedProblem } from "../types/analytics";
-import { fetchGlobalProblems } from "../services/api";
+import { useDeferredValue, useEffect, useState } from "react";
+import type { SolvedProblem, UnsolvedProblem } from "../types/analytics";
 import { formatDate, formatRating, toTitleCase } from "../utils/formatters";
 import { SearchIcon, TableIcon } from "./icons";
-import { ProblemCard } from "./ProblemCard";
 import { TagList } from "./TagList";
-
-const QUICK_TAGS = ["all", "dp", "greedy", "math", "graphs", "implementation", "data structures", "binary search"];
 
 interface ProblemsTableProps {
   problems: Array<SolvedProblem | UnsolvedProblem>;
@@ -17,6 +13,8 @@ interface ProblemsTableProps {
   problemSets?: ProblemSet[];
   sectionId?: string;
   handle?: string;
+  // lets the page switch tabs from outside, e.g. the dashboard's "see all unsolved" link
+  selectRequest?: { setId: string; requestedAt: number } | null;
 }
 
 interface ProblemSet {
@@ -167,31 +165,21 @@ export function ProblemsTable({
   dateLabel = "Date",
   problemSets,
   sectionId,
-  handle
+  handle,
+  selectRequest
 }: ProblemsTableProps) {
   const [activeSetId, setActiveSetId] = useState(problemSets?.[0]?.id || "default");
   const [verifiedIds, setVerifiedIds] = useState<Set<string>>(() => readVerifiedIds(handle));
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState("all");
-  const [globalQuery, setGlobalQuery] = useState("");
-  const [globalTag, setGlobalTag] = useState("all");
-  const [minRating, setMinRating] = useState("");
-  const [maxRating, setMaxRating] = useState("");
-  const [globalProblems, setGlobalProblems] = useState<GlobalProblem[]>([]);
-  const [globalLoading, setGlobalLoading] = useState(false);
-  const [globalError, setGlobalError] = useState<string | null>(null);
-  const [hasGlobalSearch, setHasGlobalSearch] = useState(false);
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
-  const isGlobalSearchActive = activeSetId === "global";
   const selectedProblemSet = problemSets?.find((problemSet) => problemSet.id === activeSetId);
   const activeSet = selectedProblemSet || {
     id: "default",
     label: headingLabel,
     problems,
-    title: isGlobalSearchActive ? "Global search" : title,
-    description: isGlobalSearchActive
-      ? "Search the full Codeforces problemset by problem, tag, contest, index, and rating range."
-      : description,
+    title,
+    description,
     dateLabel
   };
 
@@ -225,6 +213,13 @@ export function ProblemsTable({
     setVerifiedIds(readVerifiedIds(handle));
   }, [handle]);
 
+  useEffect(() => {
+    if (selectRequest) {
+      setActiveSetId(selectRequest.setId);
+      setSelectedTag("all");
+    }
+  }, [selectRequest]);
+
   const toggleVerified = (problemId: string) => {
     setVerifiedIds((current) => {
       const next = new Set(current);
@@ -246,48 +241,8 @@ export function ProblemsTable({
     });
   };
 
-  const searchGlobalProblems = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setGlobalLoading(true);
-    setGlobalError(null);
-    setHasGlobalSearch(true);
-
-    try {
-      const results = await fetchGlobalProblems({
-        query: globalQuery,
-        tag: globalTag,
-        minRating,
-        maxRating,
-        limit: 12
-      });
-      setGlobalProblems(results);
-    } catch (requestError) {
-      setGlobalProblems([]);
-      setGlobalError(requestError instanceof Error ? requestError.message : "Unable to search Codeforces problems right now.");
-    } finally {
-      setGlobalLoading(false);
-    }
-  };
-
-  const globalSearchTab = (
-    <button
-      type="button"
-      onClick={() => {
-        setActiveSetId("global");
-        setSelectedTag("all");
-      }}
-      className={`tab-pill rounded-lg px-4 py-2 text-sm font-semibold transition ${
-        isGlobalSearchActive
-          ? "bg-secondary text-secondary-foreground"
-          : "text-slate-600 hover:text-foreground dark:text-slate-300"
-      }`}
-    >
-      Global search
-    </button>
-  );
-
   return (
-    <section id={sectionId} className="report-shell overflow-hidden reveal-panel">
+    <section id={sectionId} className="report-shell scroll-mt-24 overflow-hidden reveal-panel">
       <div className="report-band flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
@@ -298,7 +253,6 @@ export function ProblemsTable({
           <p className="mt-2 muted-copy">{activeSet.description}</p>
         </div>
 
-        {!isGlobalSearchActive ? (
         <div className="grid gap-3 sm:grid-cols-[minmax(0,24rem)_12rem]">
           <label className="explorer-search flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm">
             <SearchIcon className="h-4 w-4 text-primary" />
@@ -324,7 +278,6 @@ export function ProblemsTable({
             ))}
           </select>
         </div>
-        ) : null}
       </div>
 
       <div className="report-body">
@@ -334,8 +287,8 @@ export function ProblemsTable({
             const isActive = problemSet.id === activeSet.id;
 
             return (
-              <Fragment key={problemSet.id}>
               <button
+                key={problemSet.id}
                 type="button"
                 onClick={() => {
                   setActiveSetId(problemSet.id);
@@ -352,87 +305,15 @@ export function ProblemsTable({
                   {problemSet.problems.length}
                 </span>
               </button>
-              {problemSet.id === "solved" ? globalSearchTab : null}
-              </Fragment>
             );
           })}
         </div>
       ) : null}
 
-      {isGlobalSearchActive ? (
-        <div className="mt-5">
-        <form onSubmit={searchGlobalProblems} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_12rem_8rem_8rem_auto]">
-          <label className="explorer-search flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm">
-            <SearchIcon className="h-4 w-4 text-primary" />
-            <input
-              type="text"
-              value={globalQuery}
-              onChange={(event) => setGlobalQuery(event.target.value)}
-              placeholder="Search problem, tag, contest, index"
-              className="w-full border-none bg-transparent outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            />
-          </label>
-
-          <select
-            value={globalTag}
-            onChange={(event) => setGlobalTag(event.target.value)}
-            className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none"
-          >
-            {QUICK_TAGS.map((tagOption) => (
-              <option key={tagOption} value={tagOption}>
-                {tagOption === "all" ? "All tags" : toTitleCase(tagOption)}
-              </option>
-            ))}
-          </select>
-
-          <input
-            type="number"
-            value={minRating}
-            onChange={(event) => setMinRating(event.target.value)}
-            placeholder="Min"
-            className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none placeholder:text-slate-400"
-          />
-
-          <input
-            type="number"
-            value={maxRating}
-            onChange={(event) => setMaxRating(event.target.value)}
-            placeholder="Max"
-            className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none placeholder:text-slate-400"
-          />
-
-          <button
-            type="submit"
-            disabled={globalLoading}
-            className="rounded-xl bg-secondary px-5 py-3 text-sm font-semibold text-secondary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {globalLoading ? "Searching..." : "Search"}
-          </button>
-        </form>
-
-        {globalError ? (
-          <p className="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{globalError}</p>
-        ) : null}
-
-        {globalProblems.length > 0 ? (
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            {globalProblems.map((problem) => (
-              <ProblemCard key={problem.id} {...problem} />
-            ))}
-          </div>
-        ) : hasGlobalSearch && !globalLoading && !globalError ? (
-          <p className="mt-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-            No global Codeforces problems matched those filters.
-          </p>
-        ) : null}
-      </div>
-      ) : null}
-
-      {!isGlobalSearchActive && activeSet.id === "unsolved" ? (
+      {activeSet.id === "unsolved" ? (
         <UnsolvedAttemptSummary problems={activeSet.problems.filter(isUnsolvedProblem)} />
       ) : null}
 
-      {!isGlobalSearchActive ? (
       <div className="mt-5 overflow-hidden rounded-xl border border-border">
         <div className="scrollbar-thin overflow-x-auto">
           <table className="min-w-full divide-y divide-border text-left">
@@ -510,7 +391,6 @@ export function ProblemsTable({
           </table>
         </div>
       </div>
-      ) : null}
       </div>
     </section>
   );

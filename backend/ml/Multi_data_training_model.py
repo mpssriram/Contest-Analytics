@@ -1,5 +1,5 @@
-from model_pipeline import ModelPipeline as MP
-from evaluation import Evaluation
+from backend.ml.model_pipeline import ModelPipeline as MP
+from backend.ml.evaluation import Evaluation
 import pathlib as path
 import joblib
 import pandas as pd

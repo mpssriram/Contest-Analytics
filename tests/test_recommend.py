@@ -1,15 +1,12 @@
 import unittest
 from unittest.mock import patch
-from pathlib import Path
-import subprocess
-import sys
 
 import numpy as np
 
 
 class FakeSource:
-    def __init__(self, handles):
-        self.handle = handles
+    def __init__(self, handle):
+        self.handle = handle
 
     def solved_problem_records_ML(self):
         return [
@@ -46,20 +43,8 @@ class FakeModel:
 
 
 class RecommendTests(unittest.TestCase):
-    def test_imports_when_ml_is_the_working_directory(self):
-        ml_directory = Path(__file__).resolve().parents[1] / "ml"
-
-        result = subprocess.run(
-            [sys.executable, "-c", "import recommend"],
-            cwd=ml_directory,
-            capture_output=True,
-            text=True,
-        )
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-
     def test_builds_exact_features_and_filters_ranked_candidates(self):
-        from ml import recommend as recommend_module
+        from backend.ml import recommend as recommend_module
 
         scaler = RecordingScaler()
         problems = [
@@ -71,7 +56,7 @@ class RecommendTests(unittest.TestCase):
             {"id": "8H", "name": "Too easy", "rating": 1200, "tags": ["dp"], "url": "easy"},
         ]
         with (
-            patch.object(recommend_module, "Get_data", FakeSource),
+            patch.object(recommend_module, "CodeforcesClient", FakeSource),
             patch.object(recommend_module, "MODEL", FakeModel()),
             patch.object(recommend_module, "SCALER", scaler),
             patch.object(recommend_module, "_get_problemset", return_value=problems),

@@ -1,11 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import Counter
 from typing import Any
 
 import pandas as pd
 
-from URLextract import Get_data
+from backend.services.codeforces_client import CodeforcesClient, InvalidHandleError
 
 COMMON_TAGS = [
     "graphs",
@@ -28,9 +28,12 @@ COMMON_TAGS = [
 ]
 
 
-class Dataframe_former:
-    
-    def __init__(self, handle: str = "", source: Get_data | None = None):
+class ProfileAnalytics:
+
+    def __init__(self, handle: str = "", source: CodeforcesClient | None = None):
+        # tag counts are used by several summary fields, so work them out once
+        self._tag_counts_cache: list[dict[str, int | str]] | None = None
+
         if source is not None:
             self.source = source
             self.handle = source.handle
@@ -38,9 +41,9 @@ class Dataframe_former:
 
         self.handle = handle.strip()
         if not self.handle:
-            raise ValueError("Codeforces handle is required.")
+            raise InvalidHandleError("Codeforces handle is required.")
 
-        self.source = Get_data(self.handle)
+        self.source = CodeforcesClient(self.handle)
 
     def solved_problems(self) -> list[dict[str, Any]]:
         return self.source.solved_problem_records()
@@ -77,6 +80,12 @@ class Dataframe_former:
         )
 
     def tag_count_from_df(self) -> list[dict[str, int | str]]:
+        if self._tag_counts_cache is None:
+            self._tag_counts_cache = self._count_tags()
+
+        return list(self._tag_counts_cache)
+
+    def _count_tags(self) -> list[dict[str, int | str]]:
         questions = self.question_tag_dataframe()
         if questions.empty:
             return []
@@ -176,9 +185,6 @@ class Dataframe_former:
         )
         return [tag for tag, _ in least_represented[:limit]]
 
-    def weakest_tags(self, limit: int = 3) -> list[str]:
-        return self.least_represented_tags(limit)
-
     def observations(self) -> list[str]:
         observations: list[str] = []
         least_represented = self.least_represented_tags(limit=2)
@@ -224,9 +230,6 @@ class Dataframe_former:
 
         return observations[:4]
 
-    def recommendations(self) -> list[str]:
-        return self.observations()
-
     def activity_trend(self, months: int = 6) -> list[dict[str, int | str]]:
         questions = self.solved_problems_dataframe()
         contest_history = pd.DataFrame(self.source.user_rating_history())
@@ -267,6 +270,8 @@ class Dataframe_former:
 
     def summary(self) -> dict[str, Any]:
         solved_problems = self.solved_problems()
+        least_represented = self.least_represented_tags()
+        observations = self.observations()
         return {
             "totalSolved": len(solved_problems),
             "totalUnsolvedTried": len(self.source.unsolved_problem_records()),
@@ -274,20 +279,10 @@ class Dataframe_former:
             "averageProblemRating": self.average_problem_rating(),
             "mostSolvedTag": self.most_solved_tag(),
             "strongestTags": self.strongest_tags(),
-            "leastRepresentedTags": self.least_represented_tags(),
-            "weakestTags": self.weakest_tags(),
-            "observations": self.observations(),
-            "recommendations": self.recommendations(),
+            "leastRepresentedTags": least_represented,
+            # the frontend still reads these two older names as a fallback
+            "weakestTags": list(least_represented),
+            "observations": observations,
+            "recommendations": list(observations),
             "activityTrend": self.activity_trend()
         }
-
-    def show_unsolved(self) -> list[str]:
-        solved_ids = {problem["id"] for problem in self.solved_problems()}
-        attempted_ids = set(self.source.unsolved_questions())
-        return sorted(attempted_ids - solved_ids)
-
-
-if __name__ == '__main__':
-    handle = input("Enter handle: ").strip()
-    analytics = Dataframe_former(handle)
-    print(analytics.summary())

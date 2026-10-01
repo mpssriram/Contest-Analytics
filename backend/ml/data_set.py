@@ -1,12 +1,7 @@
-import sys
-from pathlib import Path
-
 import pandas as pd
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from URLextract import Get_data as datas
+from backend.services.codeforces_client import CodeforcesClient
 
 
 class ML:
@@ -16,7 +11,7 @@ class ML:
         self.handle = handle
 
     def data_set_cleaning(self):
-        data = datas(handles=self.handle)
+        data = CodeforcesClient(handle=self.handle)
         solved = data.solved_problem_records_ML()
         unsolved = data.unsolved_problem_records_ML()
         id = []
@@ -59,7 +54,7 @@ class ML:
 
     def features_building(self):
         data = self.data_set_cleaning()
-        datai = datas(handles=self.handle)
+        datai = CodeforcesClient(handle=self.handle)
         tags = {}
         solved = datai.solved_problem_records_ML()
         unsolved = datai.unsolved_problem_records_ML()
@@ -267,7 +262,7 @@ class ML:
 
 
         # 8. User rating at the time of each problem attempt
-        datai = datas(self.handle)
+        datai = CodeforcesClient(self.handle)
         user_rating_history = datai.user_rating_history()
         user_rating_history = sorted(
             user_rating_history,

@@ -1,6 +1,8 @@
+import pathlib as path
+import random
+
 import pandas as pd
 import requests
-import random 
 
 
 
@@ -42,7 +44,7 @@ class Data_set_extraction:
             'rating': chosen_rating
         })
 
-        df.to_csv(f'./ml/data_set_training/{self.contest_id}.csv', index=False)
+        df.to_csv(path.Path(__file__).parent / 'data_set_training' / f'{self.contest_id}.csv', index=False)
 
 
 if __name__ == "__main__":

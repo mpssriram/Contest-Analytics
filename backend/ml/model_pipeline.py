@@ -1,6 +1,6 @@
 
 
-from data_set import ML as MLs
+from backend.ml.data_set import ML as MLs
 # here we are getting a model of logistic regression and training it on the data set we have created in the data_set.py file
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler

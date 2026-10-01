@@ -1,289 +1,151 @@
 # Contest Analytics
 
-Contest Analytics is a full-stack Codeforces analytics website that lets users search a handle and explore problem-solving insights through a clean dashboard. The project combines a FastAPI backend, MySQL-based search tracking, and a React frontend to present profile stats, tag trends, rating-wise breakdowns, activity patterns, and problem tables in a portfolio-ready format.
+Codeforces shows you a rating graph and a list of submissions, but it doesn't tell you much about *how* you practice: which topics you keep avoiding, what difficulty you're actually comfortable at, or which problems you gave up on. I built Contest Analytics to answer those questions for my own handle, and then made it work for any handle.
 
-The project was built with AI-assisted development for parts of the scaffolding, UI refinement, and integration support, while the core backend analytics and data-processing logic in `URLextract.py` and `Data_dataframe.py` was implemented by me.
+**Live:** https://contest-analytics.vercel.app
 
-## Features
+## What it does
 
-- Search any Codeforces handle and load a dedicated analytics dashboard
-- View profile information such as handle, rank, rating, max rating, avatar, country, and organization
-- See summary metrics including total solved problems, total contests, average problem rating, and most solved tag
-- Explore chart-based analytics for tag distribution, rating buckets, and recent activity
-- Review solved problems in a searchable and filterable table
-- Review unsolved attempted problems and jump back to the original Codeforces problem page
-- Compare two handles side by side across solved count, contests, average rating, topic overlap, common solved problems, and one-sided solved-problem differences
-- Track searched handles with MySQL for lightweight backend metadata
-- Use the app through a deployed frontend on Vercel and deployed backend on Railway
+Type in a Codeforces handle and you get a dashboard with:
 
-## Tech Stack
+- **Profile and summary:** rank, rating, total solved, contests played, average rating of solved problems.
+- **Tag breakdown:** which topics you solve most, and which common topics barely show up in your accepted submissions.
+- **Rating buckets:** how your solved problems are spread across difficulty (800–999, 1000–1199, …).
+- **Activity:** problems solved and contests played per month.
+- **Solved and unsolved tables:** searchable lists. The unsolved one shows problems you attempted but never got AC on, with your last verdict and number of tries. These are usually the best ones to go back to.
+- **Recommendations:** a small ML model that suggests problems which should be challenging but doable for you (more on this below).
+- **Global search:** search the whole Codeforces problemset by name, contest/index (like `1873B`), tag, or rating range.
+- **Compare:** put two handles side by side and see common problems, problems only one of you solved, and shared strong topics.
 
-### Backend
+## How the recommendations work
 
-- FastAPI
-- SQLAlchemy
-- MySQL
-- PyMySQL
-- Pandas
-- Requests
+The recommender is a logistic regression model that predicts the chance you'll solve a given problem, based on 7 features from your history *before* that attempt: the problem's rating, your rating at the time, the gap between the two, how many problems you'd solved so far, the average rating of those, and your past success rate and experience with the problem's tags.
 
-### Frontend
+I trained it on 50 users rated roughly 950–1500, picked at random from one contest (about 14,500 attempted problems in total). Each user's history is split by time, so the model is always tested on attempts that came after the ones it learned from.
 
-- React
-- Vite
-- Tailwind CSS
-- Recharts
-- React Router
+To recommend problems for you, it:
 
-### Deployment
+1. takes unattempted problems from 100 below to 400 above your current rating,
+2. keeps the ones where your predicted solve chance is between 35% and 80% (not trivial, not hopeless),
+3. takes at most 3 per rating so you get a mix, and returns the top 10.
 
-- Railway for backend and MySQL
-- Vercel for frontend
+It's a simple model trained on a small, low-rated sample, so treat it as a practice nudge, not an oracle. It works best for users under about 1600.
 
-## Project Structure
+## Tech stack
+
+- **Backend:** Python, FastAPI, SQLAlchemy, MySQL, pandas, scikit-learn
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Recharts
+- **Hosting:** Railway (API and MySQL), Vercel (frontend)
+
+## Project structure
 
 ```text
 Contest-Analytics/
-|-- app.py
-|-- database.py
-|-- URLextract.py
-|-- Data_dataframe.py
-|-- models.py
-|-- schemas.py
-|-- requirements.txt
-|-- frontend/
-|   |-- package.json
-|   |-- vercel.json
-|   |-- .env.example
-|   |-- src/
-|   |   |-- components/
-|   |   |-- hooks/
-|   |   |-- pages/
-|   |   |-- services/
-|   |   |-- types/
-|   |   |-- utils/
-|   |   |-- App.tsx
-|   |   |-- main.tsx
-|   |   `-- index.css
-|   `-- public/
-`-- README.md
+├── app.py                     # entry point for uvicorn (loads backend/main.py)
+├── config.yaml                # local database settings
+├── backend/
+│   ├── main.py                # FastAPI app, CORS, error handling
+│   ├── api/                   # one router per feature
+│   │   ├── profile.py         # profile, solved/unsolved, stats, summary, dashboard
+│   │   ├── compare.py
+│   │   ├── problems.py        # global search and recommendations
+│   │   └── tracked_handles.py
+│   ├── services/
+│   │   ├── codeforces_client.py   # talks to the Codeforces API, builds problem records
+│   │   ├── profile_analytics.py   # tag stats, rating buckets, summary, activity
+│   │   └── tracking.py            # saves searched handles to MySQL
+│   ├── ml/                    # recommender + scripts to build the data set and train
+│   ├── database.py, models.py, schemas.py, config.py
+├── tests/
+└── frontend/                  # React app
 ```
 
-## Backend Overview
+A note on the Codeforces API: it allows roughly one request every 2 seconds. `codeforces_client.py` spaces requests out, retries with backoff when it gets rate limited, and caches responses for 30 seconds. All of that state lives in memory, so **run the backend as a single worker** (don't pass `--workers`). Otherwise each worker throttles on its own and together they go over the limit.
 
-The backend is organized into small, beginner-friendly layers:
+## Running it locally
 
-- `URLextract.py`
-  Fetches raw Codeforces data and formats reusable records for profile data, solved problems, unsolved attempts, and rating history.
-- `Data_dataframe.py`
-  Builds the analytics layer, including tag statistics, rating buckets, summary metrics, strongest and least represented topics, and activity trends.
-- `database.py`
-  Configures the SQLAlchemy engine, database session, and optional MySQL connection for tracked handle storage.
-- `models.py`
-  Defines the `tracked_handles` table.
-- `schemas.py`
-  Defines response schemas used by FastAPI.
-- `app.py`
-  Exposes the API routes, configures CORS, and connects analytics + database behavior.
+You need Python 3.10+, Node 18+, and optionally MySQL. The app works without a database; it just won't remember which handles were searched.
 
-## Frontend Overview
-
-The frontend lives in `frontend/` and is designed as a responsive, component-based dashboard.
-
-Key frontend areas:
-
-- `frontend/src/pages/Home.tsx`
-  Landing page with the project hero and handle search
-- `frontend/src/pages/Dashboard.tsx`
-  Dashboard page that renders cards, charts, tables, and insights
-- `frontend/src/services/api.ts`
-  Centralized API layer for backend requests
-- `frontend/src/components/`
-  Reusable UI components such as cards, charts, tables, and search controls
-
-## API Routes
-
-Base backend URL in local development:
-
-```text
-http://127.0.0.1:8000
-```
-
-Core routes:
-
-- `GET /health`
-- `GET /api/health`
-- `GET /api/profile/{handle}`
-- `GET /api/solved/{handle}`
-- `GET /api/unsolved/{handle}`
-- `GET /api/tag-stats/{handle}`
-- `GET /api/rating-stats/{handle}`
-- `GET /api/summary/{handle}`
-- `GET /api/dashboard/{handle}`
-- `GET /api/compare/{left_handle}/{right_handle}`
-
-Database-backed routes:
-
-- `GET /api/tracked-handles`
-- `POST /api/tracked-handles/{handle}`
-
-FastAPI docs:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-## Local Setup
-
-### 1. Clone the project
+**1. Backend**
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/mpssriram/Contest-Analytics.git
 cd Contest-Analytics
-```
-
-### 2. Install backend dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-### 3. Create the MySQL database
+To use MySQL, either set `DATABASE_URL`:
 
-```sql
-CREATE DATABASE contest_analytics;
+```bash
+DATABASE_URL=mysql+pymysql://user:password@localhost:3306/codeforces
 ```
 
-### 4. Configure backend environment variables
+or fill in `config.yaml` and create the database it points to (`CREATE DATABASE codeforces;`). `DATABASE_URL` wins if both are set. The table is created automatically on startup.
 
-You can configure the database in either of these two ways.
-
-Using a full database URL:
-
-```env
-DATABASE_URL=mysql+pymysql://username:password@localhost:3306/contest_analytics
-FRONTEND_URL=http://127.0.0.1:5173
-```
-
-Or using individual MySQL variables:
-
-```env
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=your_username
-MYSQL_PASSWORD=your_password
-MYSQL_DATABASE=contest_analytics
-FRONTEND_URL=http://127.0.0.1:5173
-```
-
-### 5. Start the backend
+Then start the API:
 
 ```bash
 python -m uvicorn app:app --reload --port 8000
 ```
 
-### 6. Install frontend dependencies
+Interactive docs are at http://127.0.0.1:8000/docs.
+
+**2. Frontend**
 
 ```bash
 cd frontend
 npm install
-```
-
-### 7. Configure frontend environment variables
-
-Create a `.env` file inside `frontend/`:
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-### 8. Start the frontend
-
-```bash
+cp .env.example .env      # sets VITE_API_BASE_URL=http://127.0.0.1:8000
 npm run dev
 ```
 
-Local app URLs:
+Open http://127.0.0.1:5173.
 
-- Frontend: `http://127.0.0.1:5173`
-- Backend: `http://127.0.0.1:8000`
+**Tests and ML scripts.** Run these from the project root:
+
+```bash
+python -m unittest discover -s tests -t .
+
+python -m backend.ml.multi_data_process           # rebuild the training data from the handles list
+python -m backend.ml.Multi_data_training_model    # retrain and save the model to backend/ml/saved/
+```
+
+The tests use fake Codeforces data, so they don't need internet access or a database.
+
+## API
+
+All routes are `GET` unless noted.
+
+| Route | What it returns |
+|---|---|
+| `/api/dashboard/{handle}` | Everything the dashboard needs in one call |
+| `/api/profile/{handle}` | Profile info |
+| `/api/solved/{handle}` | Solved problems |
+| `/api/unsolved/{handle}` | Attempted but unsolved problems |
+| `/api/tag-stats/{handle}` | Solved count per tag |
+| `/api/rating-stats/{handle}` | Solved count per rating bucket |
+| `/api/summary/{handle}` | Summary numbers and observations |
+| `/api/recommend/{handle}` | Recommended problems |
+| `/api/problems/search` | Problemset search (`query`, `tag`, `min_rating`, `max_rating`, `limit`) |
+| `/api/compare/{left}/{right}` | Side-by-side comparison |
+| `/api/tracked-handles` | Recently searched handles |
+| `POST /api/tracked-handles/{handle}` | Record a search |
+| `/health`, `/api/health` | Health check |
 
 ## Deployment
 
-### Backend and Database
+- **Backend (Railway):** start command `uvicorn app:app --host 0.0.0.0 --port $PORT`. Set `DATABASE_URL` to the Railway MySQL URL, and `FRONTEND_URL` to your frontend's domain so CORS allows it.
+- **Frontend (Vercel):** root directory `frontend`, build command `npm run build`, output `dist`. Set `VITE_API_BASE_URL` to the Railway URL.
 
-Railway is used for the FastAPI backend and MySQL database.
+## How I built this
 
-Recommended backend variables:
+The parts I wrote myself are the core of the backend: pulling data from the Codeforces API and turning it into solved/unsolved records and stats (`codeforces_client.py`, `profile_analytics.py`), and the ML pipeline, from collecting the data set to engineering the features, training, and evaluating the model.
 
-```env
-DATABASE_URL=mysql+pymysql://username:password@host:port/database
-FRONTEND_URL=https://your-frontend-domain.vercel.app
-```
+I used AI tools as an assistant for the frontend UI, project scaffolding, deployment setup, refactoring and tests. I made the design decisions and I understand how every part fits together, but I didn't hand-write every line, and I'd rather say that up front.
 
-Railway start command:
+## What I'd like to add next
 
-```bash
-uvicorn app:app --host 0.0.0.0 --port $PORT
-```
-
-Run the backend single-worker (do not add `--workers`). The Codeforces rate
-limiter and response cache are in-process, so multiple workers would each
-throttle independently and collectively exceed the Codeforces rate limit.
-
-### Frontend
-
-Vercel is used for the React frontend.
-
-Recommended Vercel settings:
-
-- Root Directory: `frontend`
-- Framework Preset: `Vite`
-- Build Command: `npm run build`
-- Output Directory: `dist`
-
-Frontend environment variable:
-
-```env
-VITE_API_BASE_URL=https://your-backend-domain.up.railway.app
-```
-
-## My Contribution
-
-This project reflects both my own implementation work and responsible AI-assisted development.
-
-### What I implemented directly
-
-- The core Codeforces data-fetching and analytics logic in `URLextract.py` and `Data_dataframe.py`
-- The backend data flow that transforms raw Codeforces API responses into profile stats, solved-problem records, tag counts, rating distributions, and summary insights
-- The integration direction for how analytics data should be exposed and used in the application
-
-### Where AI-assisted development was used
-
-- Project scaffolding and cleanup for parts of the FastAPI and frontend structure
-- UI refinement and component organization in the React dashboard
-- Refactoring support, deployment setup help, and integration polishing
-- Documentation and formatting improvements
-
-In other words, I did not manually write every line in the repository. However, the project idea, backend analytics logic, integration decisions, and overall implementation direction are my own, and AI tools were used as a development assistant rather than a replacement for understanding the system.
-
-## Why This Project Matters
-
-Contest Analytics was built as a practical portfolio project around a real problem: making competitive programming progress easier to understand visually. It combines API integration, backend processing, database usage, frontend dashboards, and deployment into a single end-to-end application.
-
-For recruiters or collaborators, this project demonstrates:
-
-- full-stack project integration
-- API design with FastAPI
-- analytics-oriented Python backend development
-- React dashboard design with reusable components
-- deployment of a modern web application
-- honest and responsible use of AI-assisted development
-
-## Future Improvements
-
-- Add caching for repeated handle lookups
-- Add more detailed observation reports based on tag coverage and rating history
-- Add contest-by-contest performance trends
-- Add authentication and saved user dashboards
-- Improve test coverage for backend analytics routes and frontend data states
+- Better model features (time since last attempt, contest vs. practice) and training on a wider rating range
+- Contest-by-contest performance trends
+- A shared cache (e.g. Redis) so the API can run more than one worker
+- Logins, so users can save their dashboards

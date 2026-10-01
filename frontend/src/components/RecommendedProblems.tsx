@@ -47,13 +47,16 @@ export function RecommendedProblems({ handle }: RecommendedProblemsProps) {
     <section className="report-shell overflow-hidden">
       <div className="report-band flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="section-title">Recommended problems</h2>
+          <h2 className="section-title">Practice next</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Rated problems matched to your current practice history.
+            Problems you haven&apos;t tried that should be challenging but doable, based on your history.
           </p>
         </div>
-        <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          50–80% predicted success
+        <span
+          className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400"
+          title="Predicted chance that you solve the problem"
+        >
+          35–80% solve chance
         </span>
       </div>
 

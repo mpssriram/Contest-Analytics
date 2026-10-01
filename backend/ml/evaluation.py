@@ -1,4 +1,4 @@
-import model_pipeline as ML_pp
+from backend.ml import model_pipeline as ML_pp
 
 class Evaluation:
 

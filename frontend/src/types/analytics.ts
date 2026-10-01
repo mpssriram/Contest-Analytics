@@ -33,6 +33,7 @@ export interface UnsolvedProblem {
   lastTriedAt: string | null;
   verdict: string | null;
   language: string | null;
+  attempts?: number;
 }
 
 export interface GlobalProblem {

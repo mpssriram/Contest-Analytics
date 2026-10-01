@@ -40,17 +40,14 @@ export function GlobalProblemSearch() {
         <div>
           <div className="flex items-center gap-2">
             <TagsIcon className="h-4 w-4 text-primary" />
-            <p className="eyebrow">Global problem search</p>
+            <p className="eyebrow">Problem search</p>
           </div>
           <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight">Search the full Codeforces problemset</h2>
           <p className="mt-2 muted-copy">
-            This is not limited to the selected handle. Use it to discover any Codeforces problem by name, tag, contest, index, or rating range.
+            Find any Codeforces problem by name, ID, tag, or rating range.
           </p>
         </div>
 
-        <div className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-          Full problemset
-        </div>
       </div>
 
       <div className="report-body">
@@ -121,7 +118,7 @@ export function GlobalProblemSearch() {
             </p>
           ) : (
             <p className="rounded-xl border border-border bg-surface-muted p-4 text-sm text-slate-500 dark:text-slate-400">
-              Try `1800 dp`, `graphs`, `A`, or a contest id like `1900` to search beyond this user&apos;s submissions.
+              Try a problem ID like 1873B, a name, or pick a tag and rating range.
             </p>
           )}
         </div>

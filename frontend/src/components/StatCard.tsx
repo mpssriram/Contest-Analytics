@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "../utils/cn";
 import { AnimatedNumber } from "./AnimatedNumber";
 
 interface StatCardProps {
@@ -8,11 +9,12 @@ interface StatCardProps {
   icon: ReactNode;
   numericValue?: number | null;
   formatValue?: (value: number) => string;
+  className?: string;
 }
 
-export function StatCard({ title, value, helper, icon, numericValue, formatValue }: StatCardProps) {
+export function StatCard({ title, value, helper, icon, numericValue, formatValue, className }: StatCardProps) {
   return (
-    <section className="metric-panel hover-lift reveal-panel">
+    <section className={cn("metric-panel hover-lift reveal-panel", className)}>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
         <div className="rounded-xl bg-primary-soft p-2.5 text-primary">{icon}</div>

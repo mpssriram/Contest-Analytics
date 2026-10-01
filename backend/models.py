@@ -1,6 +1,6 @@
 from sqlalchemy import Column, DateTime, Integer, String, func
 
-from database import Base
+from backend.database import Base
 
 
 class TrackedHandle(Base):

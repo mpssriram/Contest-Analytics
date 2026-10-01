@@ -7,6 +7,7 @@ import { Compare } from "./pages/Compare";
 import { Dashboard } from "./pages/Dashboard";
 import { Home } from "./pages/Home";
 import { NotFound } from "./pages/NotFound";
+import { Problems } from "./pages/Problems";
 
 function App() {
   const { theme, toggleTheme } = useTheme();
@@ -32,6 +33,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/dashboard/:handle" element={<Dashboard />} />
           <Route path="/compare" element={<Compare />} />
+          <Route path="/problems" element={<Problems />} />
           <Route path="/home" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

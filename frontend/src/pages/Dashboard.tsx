@@ -1,19 +1,19 @@
-import { useEffect } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
-import { InsightsPanel } from "../components/InsightsPanel";
+import { FocusAreas } from "../components/FocusAreas";
 import { LoadingDashboard } from "../components/LoadingDashboard";
 import { ProblemsTable } from "../components/ProblemsTable";
-import { ProfileCard } from "../components/ProfileCard";
+import { ProfileHeader } from "../components/ProfileHeader";
 import { RecommendedProblems } from "../components/RecommendedProblems";
+import { RetryList } from "../components/RetryList";
 import { SearchBar } from "../components/SearchBar";
 import { StatCard } from "../components/StatCard";
 import { ActivityAreaChart } from "../components/charts/ActivityAreaChart";
 import { RatingBarChart } from "../components/charts/RatingBarChart";
 import { TagPieChart } from "../components/charts/TagPieChart";
 import { ActivityIcon, BarChartIcon, SparklesIcon, TagsIcon, TrophyIcon } from "../components/icons";
-import { EncryptedText } from "../components/ui/encrypted-text";
 import { useDashboardData } from "../hooks/useDashboardData";
 import { formatCompactNumber, formatDate, formatRating, toTitleCase } from "../utils/formatters";
 
@@ -24,9 +24,15 @@ export function Dashboard() {
   const handle = decodeURIComponent(params.handle || "");
   const shouldTrackSearch = searchParams.get("track") === "1";
   const { data, loading, error, reload } = useDashboardData(handle, shouldTrackSearch);
+  const [tableRequest, setTableRequest] = useState<{ setId: string; requestedAt: number } | null>(null);
 
   const handleAnalyze = (nextHandle: string) => {
     navigate(`/dashboard/${encodeURIComponent(nextHandle)}?track=1`);
+  };
+
+  const showAllUnsolved = () => {
+    setTableRequest({ setId: "unsolved", requestedAt: Date.now() });
+    document.getElementById("problems")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   useEffect(() => {
@@ -59,32 +65,20 @@ export function Dashboard() {
     );
   }
 
+  const trackedHandle = data.summary.trackedHandle;
+
   return (
     <div className="space-y-5 page-reveal">
-      <section className="report-shell overflow-hidden reveal-panel">
-        <div className="border-b border-border bg-surface-muted/80 p-6 sm:p-8">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="eyebrow">Codeforces activity report</p>
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              <EncryptedText text={data.profile.handle} revealDelayMs={28} flipDelayMs={24} encryptedClassName="text-primary" />
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-              A neutral report of profile details, accepted submissions, attempted unsolved problems, tag coverage,
-              rating buckets, and contest activity from Codeforces data.
-            </p>
-          </div>
+      {/* 1. who this is */}
+      <ProfileHeader
+        profile={data.profile}
+        action={<SearchBar onSubmit={handleAnalyze} initialValue={handle} placeholder="Look up another handle" compact />}
+      />
 
-          <div className="w-full max-w-xl">
-            <SearchBar onSubmit={handleAnalyze} initialValue={handle} compact />
-          </div>
-        </div>
-        </div>
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      {/* 2. the numbers */}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard
-          title="Total solved"
+          title="Solved"
           value={formatCompactNumber(data.summary.totalSolved)}
           numericValue={data.summary.totalSolved}
           formatValue={(value) => formatCompactNumber(Math.round(value))}
@@ -92,23 +86,23 @@ export function Dashboard() {
           icon={<TrophyIcon className="h-5 w-5" />}
         />
         <StatCard
-          title="Unsolved tried"
+          title="Tried, not solved"
           value={formatCompactNumber(data.summary.totalUnsolvedTried)}
           numericValue={data.summary.totalUnsolvedTried}
           formatValue={(value) => formatCompactNumber(Math.round(value))}
-          helper="Attempted without accepted submission."
+          helper="Attempted without an accepted submission."
           icon={<SparklesIcon className="h-5 w-5" />}
         />
         <StatCard
-          title="Total contests"
+          title="Contests"
           value={formatCompactNumber(data.summary.totalContests)}
           numericValue={data.summary.totalContests}
           formatValue={(value) => formatCompactNumber(Math.round(value))}
-          helper="Rated contest history entries."
+          helper="Rated contests played."
           icon={<ActivityIcon className="h-5 w-5" />}
         />
         <StatCard
-          title="Average rating"
+          title="Avg solved rating"
           value={formatRating(data.summary.averageProblemRating)}
           numericValue={data.summary.averageProblemRating || 0}
           formatValue={(value) => formatRating(Math.round(value))}
@@ -116,84 +110,74 @@ export function Dashboard() {
           icon={<BarChartIcon className="h-5 w-5" />}
         />
         <StatCard
-          title="Most solved tag"
+          title="Top tag"
           value={data.summary.mostSolvedTag ? toTitleCase(data.summary.mostSolvedTag) : "N/A"}
-          helper="Most frequent accepted tag."
+          helper="Most common tag in your solves."
           icon={<TagsIcon className="h-5 w-5" />}
+          className="col-span-2 lg:col-span-1"
         />
       </section>
 
-      <div className="grid gap-5 2xl:grid-cols-[22rem_minmax(0,1fr)]">
-        <div className="space-y-5 2xl:sticky 2xl:top-24 2xl:self-start">
-          <ProfileCard profile={data.profile} />
-          <InsightsPanel summary={data.summary} />
-        </div>
-
-        <div id="charts" className="grid min-w-0 gap-5 xl:grid-cols-2">
-          <TagPieChart data={data.tagStats} />
-          <RatingBarChart data={data.ratingStats} />
-          <div className="xl:col-span-2">
-            <ActivityAreaChart data={data.summary.activityTrend} />
-          </div>
+      {/* 3. what to practice next */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <RecommendedProblems handle={handle} />
+        <div className="space-y-5">
+          <RetryList problems={data.unsolvedProblems} onShowAll={showAllUnsolved} />
+          <FocusAreas summary={data.summary} />
         </div>
       </div>
 
-      <RecommendedProblems handle={handle} />
+      {/* 4. charts */}
+      <div id="charts" className="grid min-w-0 gap-5 xl:grid-cols-2">
+        <RatingBarChart data={data.ratingStats} />
+        <TagPieChart data={data.tagStats} />
+        <div className="xl:col-span-2">
+          <ActivityAreaChart data={data.summary.activityTrend} />
+        </div>
+      </div>
 
+      {/* 5. everything, searchable */}
       <ProblemsTable
         problems={data.solvedProblems}
-        headingLabel="Problem Explorer"
+        headingLabel="All problems"
         sectionId="problems"
         handle={handle}
+        selectRequest={tableRequest}
         problemSets={[
-          {
-            id: "all",
-            label: "All problems",
-            problems: [...data.solvedProblems, ...data.unsolvedProblems],
-            title: "Search across solved and attempted problems",
-            description: "Use one explorer for accepted problems and problems tried but not solved.",
-            dateLabel: "Activity"
-          },
           {
             id: "solved",
             label: "Solved",
             problems: data.solvedProblems,
-            title: "Search and filter accepted problems",
-            description: "Quickly scan solved problems and open the original Codeforces page for any question.",
+            title: "Solved problems",
+            description: "Every problem with an accepted submission, newest first.",
             dateLabel: "Solved"
           },
           {
             id: "unsolved",
             label: "Unsolved",
             problems: data.unsolvedProblems,
-            title: "Problems tried but not solved",
-            description: "Review attempted problems, inspect their tags, and jump back to Codeforces for another try.",
+            title: "Tried but not solved",
+            description: "Problems you attempted without getting accepted. Good candidates for another try.",
             dateLabel: "Last tried"
+          },
+          {
+            id: "all",
+            label: "All",
+            problems: [...data.solvedProblems, ...data.unsolvedProblems],
+            title: "Everything you attempted",
+            description: "Solved and unsolved problems together.",
+            dateLabel: "Activity"
           }
         ]}
       />
 
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-5 py-4 text-sm text-slate-500 dark:text-slate-400">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <SparklesIcon className="h-4 w-4 text-primary" />
-            Report generated from live Codeforces API data through the FastAPI backend.
-          </div>
-          {data.summary.trackedHandle ? (
-            <div className="rounded-full border border-border bg-surface-muted px-3 py-1.5">
-              Search count: {formatCompactNumber(data.summary.trackedHandle.searched_count)}
-            </div>
-          ) : null}
-          {data.summary.trackedHandle?.last_searched_at ? (
-            <div className="rounded-full border border-border bg-surface-muted px-3 py-1.5">
-              Last tracked: {formatDate(data.summary.trackedHandle.last_searched_at)}
-            </div>
-          ) : null}
-        </div>
-        <Link className="font-medium text-primary" to="/">
-          Analyze another handle
-        </Link>
-      </section>
+      {trackedHandle ? (
+        <p className="text-center text-xs text-slate-500 dark:text-slate-400">
+          Looked up {formatCompactNumber(trackedHandle.searched_count)}{" "}
+          {trackedHandle.searched_count === 1 ? "time" : "times"} on this site
+          {trackedHandle.last_searched_at ? `, last on ${formatDate(trackedHandle.last_searched_at)}` : ""}.
+        </p>
+      ) : null}
     </div>
   );
 }
