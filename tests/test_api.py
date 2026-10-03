@@ -14,10 +14,11 @@ class ApiRouteTests(unittest.TestCase):
         patcher = patch.object(CodeforcesClient, "_request", classmethod(fake_request))
         patcher.start()
         self.addCleanup(patcher.stop)
-        # start each test with an empty shared problem list
-        patcher = patch("backend.services.codeforces_client._problemset_cache", None)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        # start with an empty shared problem list
+        for name, value in [("_problemset_cache", None), ("_rated_problemset_cache", None), ("_problemset_fetched_at", 0.0)]:
+            patcher = patch(f"backend.services.codeforces_client.{name}", value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
         app_module.app.dependency_overrides[get_db] = lambda: None
         self.addCleanup(app_module.app.dependency_overrides.clear)

@@ -26,7 +26,8 @@ if not DATABASE_URL and all(
 
 DB_CONFIGURED = bool(DATABASE_URL)
 
-engine = create_engine(DATABASE_URL, echo=True, pool_pre_ping=True) if DB_CONFIGURED else None
+# echo=True prints every SQL query; handy for debugging, too noisy for normal runs
+engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True) if DB_CONFIGURED else None
 
 SessionLocal = (
     sessionmaker(autocommit=False, autoflush=False, bind=engine)

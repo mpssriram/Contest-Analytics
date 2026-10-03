@@ -47,12 +47,12 @@ class SubmissionRecordTests(unittest.TestCase):
                  "solved": 1, "solvedAt": 700, "firstTriedAt": 700},
             ],
         )
-        # Unsolved "firstTriedAt" is the most recent attempt; the training data depends on it.
+        # unsolved "firstTriedAt" is the first attempt (300), not the latest one (500)
         self.assertEqual(
             unsolved,
             [
                 {"id": "2B", "rating": 1300, "tags": ["graphs"], "contestId": 2, "attempts": 2,
-                 "solved": 0, "firstTriedAt": 500},
+                 "solved": 0, "firstTriedAt": 300},
                 {"id": "5E", "rating": None, "tags": ["strings"], "contestId": 5, "attempts": 1,
                  "solved": 0, "firstTriedAt": 50},
             ],
@@ -71,6 +71,11 @@ class SearchProblemsetTests(unittest.TestCase):
         patcher = patch.object(CodeforcesClient, "_request", classmethod(fake_request))
         patcher.start()
         self.addCleanup(patcher.stop)
+        # start with an empty shared problem list
+        for name, value in [("_problemset_cache", None), ("_rated_problemset_cache", None), ("_problemset_fetched_at", 0.0)]:
+            patcher = patch(f"backend.services.codeforces_client.{name}", value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_called_on_class_filters_by_query_and_rating(self):
         results = CodeforcesClient.search_problemset(query="graph", min_rating=1000)
@@ -91,6 +96,11 @@ class RequestErrorTests(unittest.TestCase):
         patcher = patch.object(CodeforcesClient, "_wait_for_request_slot", classmethod(lambda cls: None))
         patcher.start()
         self.addCleanup(patcher.stop)
+        # keep these tests away from the real MySQL cache
+        for name, value in [("load", lambda path, params: None), ("save", lambda path, params, payload: None)]:
+            patcher = patch(f"backend.services.response_store.{name}", value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_non_json_response_becomes_codeforces_error(self):
         response = MagicMock()

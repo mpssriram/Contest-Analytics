@@ -54,6 +54,18 @@ class Evaluation:
 
         return accuracy,precision,recall,f1_score,Specificity,balanced_accuracy
 
+    def brier_score(self):
+        # average squared gap between the predicted chance and what happened (1 solved, 0 not)
+        # lower is better. unlike ROC-AUC it also checks the probabilities themselves,
+        # so a model that says 50% for problems people solve 90% of the time scores badly
+        if len(self.y_prob) == 0:
+            return 0
+
+        total = 0
+        for probability, solved in zip(self.y_prob, self.y_validation):
+            total += (probability - solved) ** 2
+        return total / len(self.y_prob)
+
     def roc_auc(self):
         # chance that a random solved row gets a higher probability than a random unsolved row
         # done with ranks: sort by probability, tied probabilities share their average rank

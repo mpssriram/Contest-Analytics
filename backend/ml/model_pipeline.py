@@ -7,8 +7,20 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from backend.ml.data_set import ML as MLs
 # here we are getting a model of logistic regression and training it on the data set we have created in the data_set.py file
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.frozen import FrozenEstimator
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, FunctionTransformer
+from sklearn.pipeline import make_pipeline
+import numpy as np
+
+
+def log_solved_count(x):
+    # previous_solved_count only grows over time, so test rows (a user's latest problems)
+    # land far above anything seen in training. log keeps those big counts in a range the model knows
+    x = x.copy()
+    x['previous_solved_count'] = np.log1p(x['previous_solved_count'])
+    return x
 
 
 
@@ -43,7 +55,9 @@ class ModelPipeline:
 
     def model_trainning(self,X_train,Y_train,X_validation,Y_validation,X_test,Y_test):
         
-        self.scaler = StandardScaler()
+        # log step lives inside the scaler, so anything that loads scaler.joblib
+        # (recommend.py, the saved-model check) gets the same log without extra code
+        self.scaler = make_pipeline(FunctionTransformer(log_solved_count), StandardScaler())
 
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_validation_scaled = self.scaler.transform(X_validation)
@@ -57,7 +71,15 @@ class ModelPipeline:
 
         self.model.fit(X_train_scaled,Y_train)
 
-        # predict() method is used to make predictions on the test data set
+        # class_weight='balanced' trains as if half the rows were unsolved, which pushes every
+        # probability down: problems scored 35-80% were really solved 88-94% of the time.
+        # a sigmoid fitted on the validation rows maps the scores back to real solve chances.
+        # it keeps the order of the scores, so ROC-AUC stays the same
+        self.model = CalibratedClassifierCV(FrozenEstimator(self.model), method="sigmoid")
+        self.model.fit(X_validation_scaled, Y_validation)
+
+        # note: these validation probabilities were also used for the calibration,
+        # so judge the model on the test set (test_probabilities), not on these
         y_prob = self.model.predict_proba(X_validation_scaled)[:,1]
 
 

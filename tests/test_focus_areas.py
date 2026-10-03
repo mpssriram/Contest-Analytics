@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import patch
 
-from backend.services import codeforces_client
 from backend.services.codeforces_client import CodeforcesAPIError, CodeforcesClient
 from backend.services.profile_analytics import ProfileAnalytics
 
@@ -119,8 +118,9 @@ class FocusAreasTests(unittest.TestCase):
 
 class RatedProblemsetTests(unittest.TestCase):
     def setUp(self):
-        for name, value in [("_problemset_cache", None), ("_problemset_fetched_at", 0.0)]:
-            patcher = patch.object(codeforces_client, name, value)
+        # start with an empty shared problem list
+        for name, value in [("_problemset_cache", None), ("_rated_problemset_cache", None), ("_problemset_fetched_at", 0.0)]:
+            patcher = patch(f"backend.services.codeforces_client.{name}", value)
             patcher.start()
             self.addCleanup(patcher.stop)
 

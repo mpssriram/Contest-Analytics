@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -10,7 +11,8 @@ from fastapi.responses import JSONResponse
 
 from backend.api import compare, problems, profile, tracked_handles
 from backend.database import create_tables
-from backend.services.codeforces_client import CodeforcesAPIError, InvalidHandleError
+from backend.services import response_store
+from backend.services.codeforces_client import CodeforcesAPIError, CodeforcesClient, InvalidHandleError
 
 logger = logging.getLogger("contest_analytics")
 
@@ -29,12 +31,24 @@ if FRONTEND_URL:
     ALLOWED_ORIGINS.append(FRONTEND_URL)
 
 
+def preload_problemset() -> None:
+    """Download the full problem list so the first visitor doesn't have to wait for it."""
+    try:
+        CodeforcesClient.rated_problemset()
+    except Exception:
+        logger.exception("Startup warning: could not preload the problem list")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
         create_tables()
+        response_store.delete_old()
     except Exception:
         logger.exception("Startup warning: could not create tables")
+
+    # in the background, so the server is ready to answer straight away
+    threading.Thread(target=preload_problemset, daemon=True).start()
     yield
 
 

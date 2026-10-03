@@ -7,6 +7,8 @@ from typing import Any
 
 import requests
 
+from backend.services import response_store
+
 
 # NOTE: The throttle and cache below are process-local module state. They keep
 # this process under the Codeforces ~1 request / 2s limit, but they are NOT
@@ -16,6 +18,8 @@ import requests
 # state (Redis / file lock), which is out of scope for this app's scale.
 MIN_REQUEST_INTERVAL_SECONDS = 2.05
 RESPONSE_CACHE_TTL_SECONDS = 30.0
+# big replies (submission histories) add up, so only keep this many in memory
+MAX_CACHED_RESPONSES = 100
 MAX_REQUEST_ATTEMPTS = 4
 INITIAL_BACKOFF_SECONDS = 1.0
 MAX_BACKOFF_SECONDS = 16.0
@@ -31,6 +35,7 @@ _response_cache: dict[tuple[str, tuple[tuple[str, str], ...]], tuple[float, dict
 PROBLEMSET_TTL_SECONDS = 6 * 60 * 60
 _problemset_lock = threading.Lock()
 _problemset_cache: list[dict[str, Any]] | None = None
+_rated_problemset_cache: list[dict[str, Any]] | None = None
 _problemset_fetched_at = 0.0
 
 
@@ -89,6 +94,15 @@ class CodeforcesClient:
     @classmethod
     def _store_cached_payload(cls, path: str, params: dict[str, str], payload: dict[str, Any]) -> None:
         """Store an API response in the temporary in-memory cache."""
+        # drop expired entries first, then the oldest ones, so memory can't keep growing
+        now = time.monotonic()
+        for key, (expires_at, _) in list(_response_cache.items()):
+            if expires_at <= now:
+                _response_cache.pop(key, None)
+        while len(_response_cache) >= MAX_CACHED_RESPONSES:
+            oldest_key = next(iter(_response_cache))
+            _response_cache.pop(oldest_key, None)
+
         _response_cache[cls._cache_key(path, params)] = (
             time.monotonic() + RESPONSE_CACHE_TTL_SECONDS,
             payload,
@@ -132,6 +146,12 @@ class CodeforcesClient:
         cached_payload = cls._get_cached_payload(path, params)
         if cached_payload is not None:
             return cached_payload
+
+        # then the database copy, which survives restarts and lasts 10 minutes
+        stored_payload = response_store.load(path, params)
+        if stored_payload is not None:
+            cls._store_cached_payload(path, params, stored_payload)
+            return stored_payload
 
         url = f"{cls.BASE_URL}{path}"
         for attempt in range(MAX_REQUEST_ATTEMPTS):
@@ -193,6 +213,7 @@ class CodeforcesClient:
 
             if payload.get("status") == "OK":
                 cls._store_cached_payload(path, params, payload)
+                response_store.save(path, params, payload)
                 return payload
 
             comment = payload.get("comment", "Codeforces API returned an unexpected response.")
@@ -373,43 +394,62 @@ class CodeforcesClient:
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
 
     @classmethod
-    def rated_problemset(cls) -> list[dict[str, Any]]:
-        """Return every rated Codeforces problem, refreshed every few hours."""
-        global _problemset_cache, _problemset_fetched_at
+    def _load_problemset(cls) -> None:
+        """Download the full problem list if we don't have it or it is a few hours old."""
+        global _problemset_cache, _rated_problemset_cache, _problemset_fetched_at
 
         # the lock makes parallel requests wait for one download instead of each starting their own
         with _problemset_lock:
             is_old = time.monotonic() - _problemset_fetched_at > PROBLEMSET_TTL_SECONDS
-            if _problemset_cache is None or is_old:
-                payload = cls._request("/problemset.problems", {})
-                problems = []
-                for problem in payload.get("result", {}).get("problems", []):
-                    contest_id = problem.get("contestId")
-                    index = problem.get("index")
-                    rating = problem.get("rating")
-                    # skip unrated problems and problems without an id
-                    if contest_id is None or index is None or rating is None:
-                        continue
+            if _problemset_cache is not None and _rated_problemset_cache is not None and not is_old:
+                return
 
-                    tags = problem.get("tags", [])
-                    if "*special" in tags:
-                        continue
+            payload = cls._request("/problemset.problems", {})
+            statistics = payload.get("result", {}).get("problemStatistics", [])
+            solved_counts = {}
+            for item in statistics:
+                solved_counts[f"{item.get('contestId')}{item.get('index')}"] = item.get("solvedCount", 0)
 
-                    problem_id = f"{contest_id}{index}"
-                    problems.append({
-                        "id": problem_id,
-                        "name": problem.get("name", problem_id),
-                        "rating": rating,
-                        "tags": tags,
-                        "contestId": contest_id,
-                        "index": index,
-                        "url": cls.problem_url(contest_id, index),
-                    })
+            problems = []
+            rated_problems = []
+            for problem in payload.get("result", {}).get("problems", []):
+                contest_id = problem.get("contestId")
+                index = problem.get("index")
+                if contest_id is None or index is None:
+                    continue
 
-                _problemset_cache = problems
-                _problemset_fetched_at = time.monotonic()
+                problem_id = f"{contest_id}{index}"
+                record = {
+                    "id": problem_id,
+                    "name": problem.get("name", problem_id),
+                    "rating": problem.get("rating"),
+                    "tags": problem.get("tags", []),
+                    "contestId": contest_id,
+                    "index": index,
+                    "url": cls.problem_url(contest_id, index),
+                    "solvedCount": solved_counts.get(problem_id, 0),
+                }
+                problems.append(record)
 
-            return _problemset_cache
+                # the recommender and focus areas only want rated, normal problems
+                if record["rating"] is not None and "*special" not in record["tags"]:
+                    rated_problems.append(record)
+
+            _problemset_cache = problems
+            _rated_problemset_cache = rated_problems
+            _problemset_fetched_at = time.monotonic()
+
+    @classmethod
+    def all_problems(cls) -> list[dict[str, Any]]:
+        """Return every Codeforces problem (newest first), refreshed every few hours."""
+        cls._load_problemset()
+        return _problemset_cache
+
+    @classmethod
+    def rated_problemset(cls) -> list[dict[str, Any]]:
+        """Return every rated Codeforces problem, refreshed every few hours."""
+        cls._load_problemset()
+        return _rated_problemset_cache
 
     @classmethod
     def search_problemset(
@@ -425,62 +465,38 @@ class CodeforcesClient:
 
         exclude_ids skips problems by ID, e.g. the ones a user already solved.
         """
-        params: dict[str, str] = {}
-        if tag and tag != "all":
-            params["tags"] = tag
-
-        payload = cls._request("/problemset.problems", params)
-        problems = payload.get("result", {}).get("problems", [])
-        statistics = payload.get("result", {}).get("problemStatistics", [])
-        solved_lookup = {
-            f"{item.get('contestId')}{item.get('index')}": item.get("solvedCount", 0)
-            for item in statistics
-        }
         normalized_query = query.strip().lower()
         query_tokens = [token for token in normalized_query.replace("-", " ").split() if token]
         safe_limit = max(1, min(limit, 100))
         matched_problems: list[dict[str, Any]] = []
 
-        for problem in problems:
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            if contest_id is None or index is None:
+        # searches the shared copy in memory, so it costs no Codeforces call
+        for problem in cls.all_problems():
+            if tag and tag != "all" and tag not in problem["tags"]:
                 continue
 
-            rating = problem.get("rating")
+            rating = problem["rating"]
             if min_rating is not None and (rating is None or rating < min_rating):
                 continue
             if max_rating is not None and (rating is None or rating > max_rating):
                 continue
 
-            tags = problem.get("tags", [])
-            problem_id = f"{contest_id}{index}"
-            if exclude_ids and problem_id in exclude_ids:
+            if exclude_ids and problem["id"] in exclude_ids:
                 continue
 
             haystack = " ".join([
-                str(problem.get("name", "")),
-                str(contest_id),
-                str(index),
-                problem_id,
+                problem["name"],
+                str(problem["contestId"]),
+                problem["index"],
+                problem["id"],
                 str(rating or ""),
-                " ".join(tags),
+                " ".join(problem["tags"]),
             ]).lower()
 
             if query_tokens and not all(token in haystack for token in query_tokens):
                 continue
 
-            matched_problems.append({
-                "id": problem_id,
-                "name": problem.get("name", problem_id),
-                "rating": rating,
-                "tags": tags,
-                "contestId": contest_id,
-                "index": index,
-                "url": cls.problem_url(contest_id, index),
-                "solvedCount": solved_lookup.get(problem_id, 0),
-            })
-
+            matched_problems.append(problem)
             if len(matched_problems) >= safe_limit:
                 break
 
@@ -499,9 +515,7 @@ class CodeforcesClient:
                 "contestId": problem.get("contestId"),
                 "attempts": entry["attempts"],
                 "solved": 0,
-                # NOTE: this is the latest attempt, not the first one. the saved
-                # model was trained on this value, so retrain before changing it
-                "firstTriedAt": latest.get("creationTimeSeconds"),
+                "firstTriedAt": entry["firstTriedAt"],
             })
 
         return records
