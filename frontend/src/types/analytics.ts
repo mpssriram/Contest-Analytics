@@ -95,11 +95,38 @@ export interface SummaryResponse {
   trackedHandle: TrackedHandle | null;
 }
 
+export interface FocusGap {
+  tag: string;
+  levelShare: number;
+  yourShare: number;
+}
+
+export interface TagComfort {
+  tag: string;
+  comfortableRating: number;
+  solved: number;
+}
+
+export interface FocusAreasData {
+  available: boolean;
+  enoughData: boolean;
+  levelLow: number;
+  levelHigh: number;
+  comparedSolves: number;
+  comparedAgainst: "level" | "all";
+  underPracticed: FocusGap[];
+  ceilings: TagComfort[];
+  comfortable: TagComfort[];
+  overallComfortable: number | null;
+  atTop: boolean;
+}
+
 export interface DashboardData {
   profile: ProfileResponse;
   summary: SummaryResponse;
   tagStats: TagStat[];
   ratingStats: RatingStat[];
+  focusAreas: FocusAreasData;
   solvedProblems: SolvedProblem[];
   unsolvedProblems: UnsolvedProblem[];
 }

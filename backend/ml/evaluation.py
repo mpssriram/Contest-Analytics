@@ -1,3 +1,8 @@
+import sys
+import pathlib
+# lets this file run directly (Run button / python file.py), not only with python -m
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+
 from backend.ml import model_pipeline as ML_pp
 
 class Evaluation:
@@ -48,6 +53,35 @@ class Evaluation:
         balanced_accuracy = (recall + Specificity) / 2
 
         return accuracy,precision,recall,f1_score,Specificity,balanced_accuracy
+
+    def roc_auc(self):
+        # chance that a random solved row gets a higher probability than a random unsolved row
+        # done with ranks: sort by probability, tied probabilities share their average rank
+        pairs = sorted(zip(self.y_prob, self.y_validation))
+
+        ranks = [0] * len(pairs)
+        i = 0
+        while i < len(pairs):
+            j = i
+            while j + 1 < len(pairs) and pairs[j + 1][0] == pairs[i][0]:
+                j += 1
+            average_rank = (i + j) / 2 + 1
+            for k in range(i, j + 1):
+                ranks[k] = average_rank
+            i = j + 1
+
+        positives = 0
+        positive_rank_sum = 0
+        for rank, pair in zip(ranks, pairs):
+            if pair[1] == 1:
+                positives += 1
+                positive_rank_sum += rank
+        negatives = len(pairs) - positives
+
+        if positives == 0 or negatives == 0:
+            return 0
+
+        return (positive_rank_sum - positives * (positives + 1) / 2) / (positives * negatives)
 
 if __name__ == "__main__":
     handle = input("Enter the handle of the user: ")

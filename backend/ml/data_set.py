@@ -1,3 +1,8 @@
+import sys
+import pathlib
+# lets this file run directly (Run button / python file.py), not only with python -m
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+
 import pandas as pd
 import numpy as np
 

@@ -5,7 +5,27 @@ from typing import Any
 
 import pandas as pd
 
-from backend.services.codeforces_client import CodeforcesClient, InvalidHandleError
+from backend.services.codeforces_client import CodeforcesAPIError, CodeforcesClient, InvalidHandleError
+
+# ---- focus areas settings ----
+# below this many rated solves the numbers are mostly noise
+FOCUS_MIN_RATED_SOLVES = 20
+# compare against your solves in your own range only when there are enough of them
+FOCUS_MIN_LEVEL_SOLVES = 30
+# "your level" goes from 100 below to 300 above your rating
+FOCUS_LEVEL_BELOW = 100
+FOCUS_LEVEL_ABOVE = 300
+FOCUS_MIN_LEVEL_WIDTH = 400
+LOWEST_RATING = 800
+HIGHEST_RATING = 3500
+# a tag only matters if at least 5% of the problems at your level have it
+FOCUS_MIN_TAG_SHARE = 0.05
+# a gap needs to be 3+ percentage points and below 75% of the usual share
+FOCUS_MIN_GAP = 0.03
+FOCUS_GAP_RATIO = 0.75
+# a tag is a ceiling when you are only comfortable 300+ below your overall level
+FOCUS_CEILING_DROP = 300
+FOCUS_LIMIT = 3
 
 COMMON_TAGS = [
     "graphs",
@@ -267,6 +287,135 @@ class ProfileAnalytics:
             }
             for _, row in trend.iterrows()
         ]
+
+    def level_range(self) -> tuple[int, int]:
+        """Return the rating range that counts as the user's level."""
+        rating = self.source.user_info().get("rating") or 0
+        if rating:
+            center = rating
+        else:
+            # unrated users: use the middle rating of what they have solved
+            ratings = sorted(problem["rating"] for problem in self.solved_problems() if problem.get("rating"))
+            center = ratings[len(ratings) // 2] if ratings else LOWEST_RATING
+
+        # round to a hundred so the range reads nicely, like 1000-1400
+        center = int(round(center / 100) * 100)
+        low = max(LOWEST_RATING, center - FOCUS_LEVEL_BELOW)
+        high = min(HIGHEST_RATING, center + FOCUS_LEVEL_ABOVE)
+
+        # at the very bottom or top there is no room on one side, so stretch the other
+        if high - low < FOCUS_MIN_LEVEL_WIDTH:
+            if high == HIGHEST_RATING:
+                low = high - FOCUS_MIN_LEVEL_WIDTH
+            else:
+                high = low + FOCUS_MIN_LEVEL_WIDTH
+
+        return low, high
+
+    def focus_areas(self) -> dict[str, Any]:
+        """Return level-aware practice advice: under-practised tags, ceilings and comfortable tags."""
+        low, high = self.level_range()
+        rated_solved = [problem for problem in self.solved_problems() if problem.get("rating")]
+
+        result: dict[str, Any] = {
+            "available": True,
+            "enoughData": False,
+            "levelLow": low,
+            "levelHigh": high,
+            "comparedSolves": 0,
+            "comparedAgainst": "level",
+            "underPracticed": [],
+            "ceilings": [],
+            "comfortable": [],
+            "overallComfortable": None,
+            "atTop": False,
+        }
+
+        if len(rated_solved) < FOCUS_MIN_RATED_SOLVES:
+            return result
+        result["enoughData"] = True
+
+        try:
+            problemset = CodeforcesClient.rated_problemset()
+        except CodeforcesAPIError:
+            # the rest of the dashboard still works without this card
+            result["available"] = False
+            return result
+
+        # 1. how common each tag is among problems at your level
+        level_problems = [problem for problem in problemset if low <= problem["rating"] <= high]
+        level_share: dict[str, float] = {}
+        for tag in COMMON_TAGS:
+            count = 0
+            for problem in level_problems:
+                if tag in problem["tags"]:
+                    count += 1
+            level_share[tag] = count / len(level_problems) if level_problems else 0
+
+        # 2. compare with your own solves in the same range (or all of them if there are too few)
+        level_solves = [problem for problem in rated_solved if low <= problem["rating"] <= high]
+        if len(level_solves) >= FOCUS_MIN_LEVEL_SOLVES:
+            compared = level_solves
+        else:
+            compared = rated_solved
+            result["comparedAgainst"] = "all"
+        result["comparedSolves"] = len(compared)
+
+        under_practiced = []
+        for tag in COMMON_TAGS:
+            if level_share[tag] < FOCUS_MIN_TAG_SHARE:
+                continue
+
+            my_count = 0
+            for problem in compared:
+                if tag in problem["tags"]:
+                    my_count += 1
+            my_share = my_count / len(compared)
+
+            if level_share[tag] - my_share >= FOCUS_MIN_GAP and my_share < FOCUS_GAP_RATIO * level_share[tag]:
+                under_practiced.append({
+                    "tag": tag,
+                    "levelShare": round(level_share[tag], 3),
+                    "yourShare": round(my_share, 3),
+                })
+
+        # biggest gap first
+        under_practiced.sort(key=lambda item: item["levelShare"] - item["yourShare"], reverse=True)
+        result["underPracticed"] = under_practiced[:FOCUS_LIMIT]
+
+        # 3. comfortable rating per tag = 3rd hardest solve, so one lucky solve does not count
+        ratings_by_tag: dict[str, list[int]] = {}
+        for problem in rated_solved:
+            for tag in problem["tags"]:
+                if tag in COMMON_TAGS:
+                    ratings_by_tag.setdefault(tag, []).append(problem["rating"])
+
+        comfort = []
+        for tag, ratings in ratings_by_tag.items():
+            if len(ratings) < 3:
+                continue
+            ratings.sort(reverse=True)
+            comfort.append({"tag": tag, "comfortableRating": ratings[2], "solved": len(ratings)})
+
+        # overall level = your 10th hardest solve (or the easiest one if you have fewer)
+        all_ratings = sorted((problem["rating"] for problem in rated_solved), reverse=True)
+        overall = all_ratings[min(9, len(all_ratings) - 1)]
+        result["overallComfortable"] = overall
+
+        ceilings = []
+        for item in comfort:
+            # only tags that actually show up at your level
+            if item["comfortableRating"] <= overall - FOCUS_CEILING_DROP and level_share[item["tag"]] >= FOCUS_MIN_TAG_SHARE:
+                ceilings.append(item)
+        ceilings.sort(key=lambda item: item["comfortableRating"])
+        result["ceilings"] = ceilings[:FOCUS_LIMIT]
+
+        # hardest first, and the more solves the better when ratings tie
+        comfort.sort(key=lambda item: (item["comfortableRating"], item["solved"]), reverse=True)
+        result["comfortable"] = comfort[:FOCUS_LIMIT]
+
+        result["atTop"] = high == HIGHEST_RATING and not result["underPracticed"] and not result["ceilings"]
+        return result
 
     def summary(self) -> dict[str, Any]:
         solved_problems = self.solved_problems()

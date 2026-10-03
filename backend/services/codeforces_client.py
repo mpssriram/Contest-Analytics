@@ -26,6 +26,13 @@ _last_request_started_at = 0.0
 # references directly without an expensive deep copy.
 _response_cache: dict[tuple[str, tuple[tuple[str, str], ...]], tuple[float, dict[str, Any]]] = {}
 
+# the full problem list is big and only changes when new contests come out,
+# so it is kept for a few hours and shared by the recommender and focus areas
+PROBLEMSET_TTL_SECONDS = 6 * 60 * 60
+_problemset_lock = threading.Lock()
+_problemset_cache: list[dict[str, Any]] | None = None
+_problemset_fetched_at = 0.0
+
 
 class CodeforcesAPIError(Exception):
     def __init__(self, message: str, status_code: int = 502):
@@ -366,6 +373,45 @@ class CodeforcesClient:
         return f"https://codeforces.com/problemset/problem/{contest_id}/{index}"
 
     @classmethod
+    def rated_problemset(cls) -> list[dict[str, Any]]:
+        """Return every rated Codeforces problem, refreshed every few hours."""
+        global _problemset_cache, _problemset_fetched_at
+
+        # the lock makes parallel requests wait for one download instead of each starting their own
+        with _problemset_lock:
+            is_old = time.monotonic() - _problemset_fetched_at > PROBLEMSET_TTL_SECONDS
+            if _problemset_cache is None or is_old:
+                payload = cls._request("/problemset.problems", {})
+                problems = []
+                for problem in payload.get("result", {}).get("problems", []):
+                    contest_id = problem.get("contestId")
+                    index = problem.get("index")
+                    rating = problem.get("rating")
+                    # skip unrated problems and problems without an id
+                    if contest_id is None or index is None or rating is None:
+                        continue
+
+                    tags = problem.get("tags", [])
+                    if "*special" in tags:
+                        continue
+
+                    problem_id = f"{contest_id}{index}"
+                    problems.append({
+                        "id": problem_id,
+                        "name": problem.get("name", problem_id),
+                        "rating": rating,
+                        "tags": tags,
+                        "contestId": contest_id,
+                        "index": index,
+                        "url": cls.problem_url(contest_id, index),
+                    })
+
+                _problemset_cache = problems
+                _problemset_fetched_at = time.monotonic()
+
+            return _problemset_cache
+
+    @classmethod
     def search_problemset(
         cls,
         query: str = "",
@@ -373,8 +419,12 @@ class CodeforcesClient:
         min_rating: int | None = None,
         max_rating: int | None = None,
         limit: int = 50,
+        exclude_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search Codeforces problems using text, tags, ratings, and a result limit."""
+        """Search Codeforces problems using text, tags, ratings, and a result limit.
+
+        exclude_ids skips problems by ID, e.g. the ones a user already solved.
+        """
         params: dict[str, str] = {}
         if tag and tag != "all":
             params["tags"] = tag
@@ -405,6 +455,9 @@ class CodeforcesClient:
 
             tags = problem.get("tags", [])
             problem_id = f"{contest_id}{index}"
+            if exclude_ids and problem_id in exclude_ids:
+                continue
+
             haystack = " ".join([
                 str(problem.get("name", "")),
                 str(contest_id),

@@ -1,9 +1,13 @@
+import sys
+import pathlib
+# lets this file run directly (Run button / python file.py), not only with python -m
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+
 from backend.ml.model_pipeline import ModelPipeline as MP
 from backend.ml.evaluation import Evaluation
 import pathlib as path
 import joblib
 import pandas as pd
-from sklearn.metrics import roc_auc_score
 
 FEATURES = ['rating','previous_solved_count','previous_avg_solved_rating','previous_avg_tag_success_rate','previous_avg_tag_attempted','user_rating_at_time','rating_gap']
 SAVE_MODEL = True
@@ -67,13 +71,13 @@ if __name__ == "__main__":
     #     ev = Evaluation(threshold=t, y_prob=training.y_prob, y_true=training.Y_validation)
     #     print(t, ev.model_calculations(), ev.metrics())
 
-    # print("Validation ROC-AUC:", roc_auc_score(training.Y_validation, training.y_prob))
+    # print("Validation ROC-AUC:", Evaluation(y_prob=training.y_prob, y_true=training.Y_validation).roc_auc())
 
     print("TEST RESULT at threshold 0.65")
     y_prob_test, Y_test = training.pipeline.test_probabilities(training.X_test, training.Y_test)
     ev = Evaluation(threshold=0.65, y_prob=y_prob_test, y_true=Y_test)
     print(ev.model_calculations())
     print(ev.metrics())
-    print("Test ROC-AUC:", roc_auc_score(Y_test, y_prob_test))
+    print("Test ROC-AUC:", ev.roc_auc())
 
         

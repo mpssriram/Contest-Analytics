@@ -14,6 +14,10 @@ class ApiRouteTests(unittest.TestCase):
         patcher = patch.object(CodeforcesClient, "_request", classmethod(fake_request))
         patcher.start()
         self.addCleanup(patcher.stop)
+        # start each test with an empty shared problem list
+        patcher = patch("backend.services.codeforces_client._problemset_cache", None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
         app_module.app.dependency_overrides[get_db] = lambda: None
         self.addCleanup(app_module.app.dependency_overrides.clear)
@@ -43,12 +47,21 @@ class ApiRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual([problem["id"] for problem in response.json()], ["8B"])
 
+    def test_search_hides_problems_the_handle_solved(self):
+        # 1A is in the problem list and the fake user has solved it
+        without_handle = self.client.get("/api/problems/search", params={"max_rating": 3500}).json()
+        with_handle = self.client.get("/api/problems/search", params={"max_rating": 3500, "handle": "student"})
+
+        self.assertEqual(with_handle.status_code, 200, with_handle.text)
+        self.assertIn("1A", [problem["id"] for problem in without_handle])
+        self.assertEqual([problem["id"] for problem in with_handle.json()], ["7A", "8B"])
+
     def test_dashboard_shape(self):
         body = self.client.get("/api/dashboard/student").json()
 
         self.assertEqual(
             set(body),
-            {"profile", "summary", "tagStats", "ratingStats", "solvedProblems", "unsolvedProblems"},
+            {"profile", "summary", "tagStats", "ratingStats", "focusAreas", "solvedProblems", "unsolvedProblems"},
         )
         self.assertEqual(body["summary"]["totalSolved"], 2)
         self.assertEqual(body["summary"]["totalUnsolvedTried"], 2)

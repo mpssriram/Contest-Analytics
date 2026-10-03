@@ -1,3 +1,8 @@
+import sys
+import pathlib
+# lets this file run directly (Run button / python file.py), not only with python -m
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+
 
 
 from backend.ml.data_set import ML as MLs

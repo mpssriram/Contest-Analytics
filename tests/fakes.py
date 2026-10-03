@@ -52,6 +52,7 @@ RATING_HISTORY = [
 PROBLEMSET = {
     "problems": [
         {"contestId": 7, "index": "A", "name": "Easy dp", "rating": 800, "tags": ["dp"]},
+        {"contestId": 1, "index": "A", "name": "Problem 1A", "rating": 1200, "tags": ["dp"]},
         {"contestId": 8, "index": "B", "name": "Graph walk", "rating": 1600, "tags": ["graphs"]},
         {"contestId": 9, "index": "C", "name": "Unrated", "tags": ["dp"]},
     ],

@@ -1,30 +1,40 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { GlobalProblem } from "../types/analytics";
 import { toTitleCase } from "../utils/formatters";
-import { fetchGlobalProblems } from "../services/api";
+import { fetchGlobalProblems, type ProblemSearchFilters } from "../services/api";
 import { SearchIcon, TagsIcon } from "./icons";
 import { ProblemCard } from "./ProblemCard";
 
 const QUICK_TAGS = ["all", "dp", "greedy", "math", "graphs", "implementation", "data structures", "binary search"];
 
 export function GlobalProblemSearch() {
-  const [query, setQuery] = useState("");
-  const [tag, setTag] = useState("all");
-  const [minRating, setMinRating] = useState("");
-  const [maxRating, setMaxRating] = useState("");
+  // filters can come from the link, e.g. /problems?tag=dp&min=1000&max=1400 from the dashboard
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkQuery = searchParams.get("q") || "";
+  const linkTag = searchParams.get("tag") || "all";
+  const linkMin = searchParams.get("min") || "";
+  const linkMax = searchParams.get("max") || "";
+  const hideSolvedBy = searchParams.get("handle") || "";
+
+  const [query, setQuery] = useState(linkQuery);
+  const [tag, setTag] = useState(linkTag);
+  const [minRating, setMinRating] = useState(linkMin);
+  const [maxRating, setMaxRating] = useState(linkMax);
   const [problems, setProblems] = useState<GlobalProblem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const searchProblems = async (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault();
+  const tagOptions = QUICK_TAGS.includes(tag) ? QUICK_TAGS : [...QUICK_TAGS, tag];
+
+  const runSearch = async (filters: ProblemSearchFilters) => {
     setLoading(true);
     setError(null);
     setHasSearched(true);
 
     try {
-      const results = await fetchGlobalProblems({ query, tag, minRating, maxRating, limit: 40 });
+      const results = await fetchGlobalProblems({ ...filters, handle: hideSolvedBy, limit: 40 });
       setProblems(results);
     } catch (requestError) {
       setProblems([]);
@@ -33,6 +43,31 @@ export function GlobalProblemSearch() {
       setLoading(false);
     }
   };
+
+  const searchProblems = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    runSearch({ query, tag, minRating, maxRating });
+  };
+
+  const showSolvedToo = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("handle");
+    setSearchParams(next);
+  };
+
+  // when opened from a link with filters, fill the form and search straight away
+  useEffect(() => {
+    if (!linkQuery && linkTag === "all" && !linkMin && !linkMax) {
+      return;
+    }
+
+    setQuery(linkQuery);
+    setTag(linkTag);
+    setMinRating(linkMin);
+    setMaxRating(linkMax);
+    runSearch({ query: linkQuery, tag: linkTag, minRating: linkMin, maxRating: linkMax });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkQuery, linkTag, linkMin, linkMax, hideSolvedBy]);
 
   return (
     <section className="report-shell overflow-hidden reveal-panel">
@@ -68,7 +103,7 @@ export function GlobalProblemSearch() {
             onChange={(event) => setTag(event.target.value)}
             className="rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none"
           >
-            {QUICK_TAGS.map((tagOption) => (
+            {tagOptions.map((tagOption) => (
               <option key={tagOption} value={tagOption}>
                 {tagOption === "all" ? "All tags" : toTitleCase(tagOption)}
               </option>
@@ -99,6 +134,15 @@ export function GlobalProblemSearch() {
             {loading ? "Searching..." : "Search"}
           </button>
         </form>
+
+        {hideSolvedBy ? (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            Hiding problems <span className="font-medium text-foreground">{hideSolvedBy}</span> already solved.
+            <button type="button" onClick={showSolvedToo} className="font-medium text-primary transition hover:opacity-80">
+              Show them too
+            </button>
+          </p>
+        ) : null}
 
         {error ? (
           <p className="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>

@@ -123,7 +123,7 @@ export function Dashboard() {
         <RecommendedProblems handle={handle} />
         <div className="space-y-5">
           <RetryList problems={data.unsolvedProblems} onShowAll={showAllUnsolved} />
-          <FocusAreas summary={data.summary} />
+          <FocusAreas focus={data.focusAreas} handle={handle} />
         </div>
       </div>
 

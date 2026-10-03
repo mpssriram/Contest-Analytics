@@ -37,37 +37,11 @@ except FileNotFoundError as error:
     MODEL = None
     SCALER = None
     _MODEL_ERROR = error
- 
-# all rated Codeforces problems, fetched once and kept in memory
-_PROBLEMSET_CACHE = None
- 
- 
+
+
 def _get_problemset(source):
-    # source is a CodeforcesClient object
-    global _PROBLEMSET_CACHE
-    if _PROBLEMSET_CACHE is None:
-        payload = source._request("/problemset.problems", {})
-        _PROBLEMSET_CACHE = []
-        for problem in payload.get("result", {}).get("problems", []):
-            contest_id = problem.get("contestId")
-            index = problem.get("index")
-            rating = problem.get("rating")
-            # skip unrated problems and problems without an id
-            if contest_id is None or index is None or rating is None:
-                continue
-
-            if "*special" in problem.get("tags", []):
-                continue
-
-            problem_id = f"{contest_id}{index}"
-            _PROBLEMSET_CACHE.append({
-                "id": problem_id,
-                "name": problem.get("name", problem_id),
-                "rating": rating,
-                "tags": problem.get("tags", []),
-                "url": source.problem_url(contest_id, index),
-            })
-    return _PROBLEMSET_CACHE
+    # all rated Codeforces problems, shared with the dashboard and refreshed every few hours
+    return source.rated_problemset()
  
  
 def _history_features(source):

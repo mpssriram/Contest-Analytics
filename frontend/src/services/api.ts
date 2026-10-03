@@ -72,6 +72,8 @@ export interface ProblemSearchFilters {
   minRating?: string;
   maxRating?: string;
   limit?: number;
+  // hide problems this handle already solved
+  handle?: string;
 }
 
 export async function fetchGlobalProblems(filters: ProblemSearchFilters): Promise<GlobalProblem[]> {
@@ -92,6 +94,9 @@ export async function fetchGlobalProblems(filters: ProblemSearchFilters): Promis
   }
   if (maxRating) {
     searchParams.set("max_rating", maxRating);
+  }
+  if (filters.handle?.trim()) {
+    searchParams.set("handle", filters.handle.trim());
   }
   searchParams.set("limit", String(filters.limit || 40));
 

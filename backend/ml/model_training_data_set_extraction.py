@@ -25,13 +25,17 @@ class Data_set_extraction:
 
             return handles,rating
         else:
-            return f"Failed to fetch data. Status code: {response.status_code}", response.text
+            raise RuntimeError(f"Failed to fetch data. Status code: {response.status_code}, {response.text}")
 
     def randomize_handles(self):
         handles,rating = self.get_handles()
-        positions = random.sample(range(len(handles)), 50)
+        if len(handles) == 0:
+            raise ValueError(f"No users rated 500-1500 in contest {self.contest_id}. "
+                             "Use the contest ID from the URL (codeforces.com/contest/<id>), not the round number.")
 
         random.seed(42)
+        positions = random.sample(range(len(handles)), min(50, len(handles)))
+
         chosen_handles = []
         chosen_rating = []
 

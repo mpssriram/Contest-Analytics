@@ -81,6 +81,7 @@ def get_dashboard(handle: str, track: bool = False, db: Session = Depends(get_db
         "summary": summary,
         "tagStats": analytics.tag_count_from_df(),
         "ratingStats": analytics.rating_bucket_stats(),
+        "focusAreas": analytics.focus_areas(),
         "solvedProblems": solved_problems,
         "unsolvedProblems": unsolved_problems,
     }
